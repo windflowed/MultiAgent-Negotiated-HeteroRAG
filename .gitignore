@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# 忽略根目录docs文件夹
+docs/
+# 忽略根目录AGENTS.md
+AGENTS.md
