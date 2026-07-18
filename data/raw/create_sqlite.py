@@ -1,13 +1,11 @@
 """TASK-007: 生成中文 SQLite 数据库"""
-import os
 import json
 import sqlite3
-import pandas as pd
 from pathlib import Path
+import pandas as pd
 
-DATA_DIR = Path(__file__).parent
-CSV_FILE = DATA_DIR / "tmdb_movies.csv"
-DB_FILE = DATA_DIR.parent / "sql" / "movies.db"
+CSV_FILE = Path(__file__).parent / "tmdb_movies.csv"
+DB_FILE = Path(__file__).parent.parent / "sql" / "movies.db"
 
 
 def create_tables(conn):
