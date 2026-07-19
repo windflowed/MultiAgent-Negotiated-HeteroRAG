@@ -1,9 +1,12 @@
 """
 工作流节点函数封装
 将 6 个 Agent 封装为 LangGraph 节点函数，输入 state，输出更新后的 state 字典
+包含 StateGraph 构建与编译
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, List
+
+from langgraph.graph import StateGraph, END, START
 
 from src.graph.state_schema import AgentState
 from src.agents.router_agent import create_router_agent
@@ -197,7 +200,7 @@ def generator_node(state: AgentState) -> Dict[str, Any]:
         }
 
 
-def route_to_sources(state: AgentState) -> list:
+def route_to_sources(state: AgentState) -> List[str]:
     """
     条件边路由函数：根据路由结果返回需要激活的节点列表
 
@@ -220,34 +223,88 @@ def route_to_sources(state: AgentState) -> list:
     return nodes
 
 
+def build_workflow():
+    """
+    构建 LangGraph 工作流
+
+    Returns:
+        编译后的工作流应用实例
+    """
+    # 创建 StateGraph
+    workflow = StateGraph(AgentState)
+
+    # 添加节点
+    workflow.add_node("router", router_node)
+    workflow.add_node("sql_retriever", sql_retriever_node)
+    workflow.add_node("doc_retriever", doc_retriever_node)
+    workflow.add_node("kg_retriever", kg_retriever_node)
+    workflow.add_node("fusion", fusion_node)
+    workflow.add_node("generator", generator_node)
+
+    # 设置入口
+    workflow.set_entry_point("router")
+
+    # 条件边：根据路由结果动态激活检索节点
+    workflow.add_conditional_edges(
+        "router",
+        route_to_sources,
+        {
+            "sql_retriever": "sql_retriever",
+            "doc_retriever": "doc_retriever",
+            "kg_retriever": "kg_retriever",
+        }
+    )
+
+    # 汇聚边：所有检索节点完成后进入融合
+    workflow.add_edge("sql_retriever", "fusion")
+    workflow.add_edge("doc_retriever", "fusion")
+    workflow.add_edge("kg_retriever", "fusion")
+
+    # 顺序边：融合 -> 生成 -> 结束
+    workflow.add_edge("fusion", "generator")
+    workflow.add_edge("generator", END)
+
+    # 编译
+    app = workflow.compile()
+
+    return app
+
+
+def get_compiled_workflow():
+    """
+    获取编译后的工作流实例（单例模式）
+
+    Returns:
+        编译后的工作流应用实例
+    """
+    if not hasattr(get_compiled_workflow, "_instance"):
+        get_compiled_workflow._instance = build_workflow()
+    return get_compiled_workflow._instance
+
+
 if __name__ == "__main__":
     print("=" * 60)
-    print("工作流节点函数测试")
+    print("工作流构建与编译测试")
     print("=" * 60)
 
+    # 测试工作流构建
+    print("\n构建工作流...")
+    app = build_workflow()
+    print(f"工作流编译成功: {app is not None}")
+
+    # 测试工作流执行
+    print("\n测试工作流执行...")
     from src.graph.state_schema import create_initial_state
 
-    # 测试初始状态
     test_state = create_initial_state("阿凡达电影的评分是多少？")
-    print(f"初始状态: {test_state}")
+    print(f"初始状态: query={test_state['query']}")
 
-    # 测试路由节点
-    print("\n测试路由节点:")
-    updated_state = router_node(test_state)
-    print(f"更新后的状态: {updated_state}")
-
-    # 测试 SQL 检索节点
-    test_state.update(updated_state)
-    print("\n测试 SQL 检索节点:")
-    sql_result = sql_retriever_node(test_state)
-    print(f"SQL 检索结果: {sql_result}")
-
-    # 测试文档检索节点
-    print("\n测试文档检索节点:")
-    doc_result = doc_retriever_node(test_state)
-    print(f"文档检索结果: {doc_result}")
-
-    # 测试知识图谱检索节点
-    print("\n测试知识图谱检索节点:")
-    kg_result = kg_retriever_node(test_state)
-    print(f"知识图谱检索结果: {kg_result}")
+    try:
+        result = app.invoke(test_state)
+        print(f"\n工作流执行成功:")
+        print(f"  路由结果: {result.get('routed_sources', [])}")
+        print(f"  答案: {result.get('answer', '')[:100]}...")
+        print(f"  来源: {result.get('sources', [])}")
+        print(f"  置信度: {result.get('final_confidence', 0.0):.2f}")
+    except Exception as e:
+        print(f"工作流执行失败: {e}")
