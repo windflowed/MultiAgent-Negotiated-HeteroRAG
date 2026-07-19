@@ -7,7 +7,7 @@ import json
 import re
 from typing import Dict, List, Any, Optional, Tuple
 
-from src.utils.common import load_config
+from src.utils.common import load_config, SQLiteDatabase
 from src.utils.kg_utils import KnowledgeGraph
 from src.utils.prompts import KG_ENTITY_LINK_PROMPT
 
@@ -24,6 +24,7 @@ class KGAgent:
         """
         self.config = load_config()
         self.kg = KnowledgeGraph()
+        self.db = SQLiteDatabase()
 
         # 加载知识图谱
         try:
@@ -247,6 +248,138 @@ class KGAgent:
         # 默认使用单跳查询
         return "single_hop"
 
+    def _detect_rating_filter(self, query: str) -> Optional[float]:
+        """
+        检测查询中是否包含评分/票房过滤条件，并提取阈值
+
+        Args:
+            query: 用户查询
+
+        Returns:
+            评分阈值，如果未检测到则返回 None
+        """
+        # 评分相关关键词模式
+        rating_patterns = [
+            r'评分(\d+\.?\d*)[以上高于大于]+',
+            r'(\d+\.?\d*)分[以上高于大于]+',
+            r'高于(\d+\.?\d*)分',
+            r'超过(\d+\.?\d*)分',
+            r'大于(\d+\.?\d*)分',
+        ]
+
+        for pattern in rating_patterns:
+            match = re.search(pattern, query)
+            if match:
+                try:
+                    return float(match.group(1))
+                except ValueError:
+                    continue
+
+        return None
+
+    def _query_sql_for_ratings(
+        self, movie_names: List[str], rating_threshold: Optional[float] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        通过 SQL 查询电影的评分信息
+
+        Args:
+            movie_names: 电影名称列表（中文名或英文名）
+            rating_threshold: 评分阈值，低于此值的电影将被过滤
+
+        Returns:
+            包含电影名称和评分的字典列表
+        """
+        if not movie_names:
+            return []
+
+        try:
+            # 构建查询：同时匹配中文名和英文名
+            # 使用 UNION 合并两个查询
+            title_conditions = " OR ".join([f"title = :name{i}" for i in range(len(movie_names))])
+            title_zh_conditions = " OR ".join([f"title_zh = :name{i}" for i in range(len(movie_names))])
+            
+            sql = f"""
+                SELECT title, title_zh, vote_average, revenue
+                FROM movies
+                WHERE ({title_conditions} OR {title_zh_conditions})
+                AND vote_average > 0
+            """
+            
+            # 构建参数字典
+            params = {}
+            for i, name in enumerate(movie_names):
+                params[f"name{i}"] = name
+            
+            results = self.db.execute_query(sql, params)
+
+            # 如果指定了评分阈值，过滤结果
+            if rating_threshold is not None:
+                results = [
+                    r for r in results
+                    if r.get("vote_average", 0) >= rating_threshold
+                ]
+
+            return results
+
+        except Exception as e:
+            print(f"SQL 查询评分失败: {e}")
+            return []
+
+    def _filter_triples_by_rating(
+        self,
+        triples: List[Dict[str, Any]],
+        rating_threshold: float
+    ) -> List[Dict[str, Any]]:
+        """
+        根据评分阈值过滤三元组
+
+        Args:
+            triples: 原始三元组列表
+            rating_threshold: 评分阈值
+
+        Returns:
+            过滤后的三元组列表
+        """
+        # 提取三元组中的电影名称
+        movie_names = []
+        for triple in triples:
+            # 从三元组中提取电影名（通常是 object 字段）
+            movie_name = triple.get("object", "")
+            if movie_name:
+                movie_names.append(movie_name)
+
+        if not movie_names:
+            return triples
+
+        # 查询 SQL 获取评分
+        rating_results = self._query_sql_for_ratings(movie_names, rating_threshold)
+
+        # 构建电影名→评分的映射
+        rating_map = {}
+        for r in rating_results:
+            title = r.get("title", "")
+            title_zh = r.get("title_zh", "")
+            vote_avg = r.get("vote_average", 0)
+            if title_zh:
+                rating_map[title_zh] = vote_avg
+            if title:
+                rating_map[title] = vote_avg
+
+        # 过滤三元组：只保留评分达标的电影
+        filtered_triples = []
+        for triple in triples:
+            movie_name = triple.get("object", "")
+            # 检查电影名是否在评分映射中
+            if movie_name in rating_map:
+                # 评分达标，保留
+                filtered_triples.append(triple)
+            elif movie_name not in rating_map:
+                # 无法获取评分，保留（降级处理）
+                filtered_triples.append(triple)
+
+        return filtered_triples
+
     def _format_triple(
         self,
         triple: Tuple[str, str, str],
@@ -372,6 +505,18 @@ class KGAgent:
             if result["triples"]:
                 result["success"] = True
                 result["confidence"] = 0.8 if len(result["triples"]) > 0 else 0.5
+
+            # 5. 检测并应用评分过滤（SQL 交叉查询）
+            rating_threshold = self._detect_rating_filter(natural_language_query)
+            if rating_threshold is not None and result["triples"]:
+                result["triples"] = self._filter_triples_by_rating(
+                    result["triples"], rating_threshold
+                )
+                # 更新置信度（经过评分过滤，置信度更高）
+                if result["triples"]:
+                    result["confidence"] = 0.9
+                    result["rating_filtered"] = True
+                    result["rating_threshold"] = rating_threshold
 
         except Exception as e:
             result["error"] = str(e)

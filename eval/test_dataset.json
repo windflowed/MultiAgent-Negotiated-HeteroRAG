@@ -1,0 +1,1320 @@
+{
+  "metadata": {
+    "version": "1.1",
+    "total_questions": 50,
+    "categories": {
+      "sql_only": "纯SQL可答 - 结构化数据查询能力",
+      "doc_only": "纯文档可答 - 非结构化文本检索能力",
+      "kg_only": "纯KG可答 - 关系推理能力",
+      "sql_doc": "SQL+文档联合 - 双源融合能力",
+      "all_sources": "三者联合 - 全源融合与冲突消解"
+    },
+    "conflict_note": "标记为conflict的问题为人工植入的冲突测试用例，用于测试系统的冲突检测与消解能力",
+    "data_sources": {
+      "sql": "SQLite数据库 - 电影基本信息、票房、评分等结构化数据",
+      "doc": "中文维基百科文档 - 电影剧情、幕后、评价等非结构化文本",
+      "kg": "NetworkX知识图谱 - 实体间关系，支持多跳推理"
+    },
+    "edge_cases_count": 5,
+    "verification_rules_added": true,
+    "conflict_verification_added": true,
+    "changelog": [
+      "v1.1: 添加答案验证规则、边界测试用例、冲突消解验证标准",
+      "v1.0: 初始评测集，50题+5个冲突用例"
+    ]
+  },
+  "questions": [
+    {
+      "id": 1,
+      "category": "sql_only",
+      "question": "数据库中评分最高的5部电影分别是哪些?评分是多少?",
+      "expected_answer": "评分最高的5部电影为:肖申克的救赎(8.5分)、教父(8.4分)、千与千寻(8.3分)、教父2(8.3分)、辛德勒的名单(8.3分)",
+      "data_sources": [
+        "sql"
+      ],
+      "difficulty": "easy",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "肖申克的救赎",
+          "教父",
+          "千与千寻"
+        ],
+        "numeric_range": [
+          8.0,
+          9.0
+        ],
+        "min_movies": 3,
+        "rule": "答案应包含至少3部高评分电影名称，评分在8.0-9.0之间"
+      }
+    },
+    {
+      "id": 2,
+      "category": "sql_only",
+      "question": "票房收入最高的电影是哪部?票房是多少?",
+      "expected_answer": "票房收入最高的电影是阿凡达,票房为2787965087.0美元(约27.88亿美元)",
+      "data_sources": [
+        "sql"
+      ],
+      "difficulty": "easy",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "阿凡达"
+        ],
+        "numeric_range": [
+          2000000000,
+          3000000000
+        ],
+        "rule": "答案应包含'阿凡达'，票房数值在20-30亿美元之间"
+      }
+    },
+    {
+      "id": 3,
+      "category": "sql_only",
+      "question": "数据库中共有多少部电影记录?",
+      "expected_answer": "数据库中共有4803部电影记录",
+      "data_sources": [
+        "sql"
+      ],
+      "difficulty": "easy",
+      "conflict": false,
+      "verification": {
+        "numeric_range": [
+          4800,
+          4810
+        ],
+        "rule": "电影总数应在4800-4810之间"
+      }
+    },
+    {
+      "id": 4,
+      "category": "sql_only",
+      "question": "科幻类(Science Fiction)电影的平均评分是多少?",
+      "expected_answer": "科幻类电影的平均评分约为6.01分",
+      "data_sources": [
+        "sql"
+      ],
+      "difficulty": "medium",
+      "conflict": false,
+      "verification": {
+        "numeric_range": [
+          5.5,
+          6.5
+        ],
+        "rule": "平均评分应在5.5-6.5之间"
+      }
+    },
+    {
+      "id": 5,
+      "category": "sql_only",
+      "question": "票房超过10亿美元的电影有多少部?",
+      "expected_answer": "票房超过10亿美元的电影共有21部",
+      "data_sources": [
+        "sql"
+      ],
+      "difficulty": "medium",
+      "conflict": false,
+      "verification": {
+        "numeric_range": [
+          18,
+          25
+        ],
+        "rule": "票房超10亿的电影数量应在18-25部之间"
+      }
+    },
+    {
+      "id": 6,
+      "category": "sql_only",
+      "question": "哪位导演的电影数量最多?共执导了多少部?",
+      "expected_answer": "Steven Spielberg的电影数量最多,共执导了27部电影",
+      "data_sources": [
+        "sql"
+      ],
+      "difficulty": "medium",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "Spielberg",
+          "斯皮尔伯格"
+        ],
+        "numeric_range": [
+          25,
+          30
+        ],
+        "rule": "答案应包含Spielberg/斯皮尔伯格，电影数量在25-30部之间"
+      }
+    },
+    {
+      "id": 7,
+      "category": "sql_only",
+      "question": "动画类(Animation)电影中评分最高的是哪部?评分是多少?",
+      "expected_answer": "动画类电影中评分最高的是千与千寻,评分为8.3分",
+      "data_sources": [
+        "sql"
+      ],
+      "difficulty": "medium",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "千与千寻",
+          "Spirited Away"
+        ],
+        "numeric_range": [
+          8.0,
+          8.5
+        ],
+        "rule": "答案应包含千与千寻/Spirited Away，评分在8.0-8.5之间"
+      }
+    },
+    {
+      "id": 8,
+      "category": "sql_only",
+      "question": "恐怖类(Horror)电影中票房最高的是哪部?票房是多少?",
+      "expected_answer": "恐怖类电影中票房最高的是我是传奇,票房为585349010.0美元(约5.85亿美元)",
+      "data_sources": [
+        "sql"
+      ],
+      "difficulty": "medium",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "我是传奇",
+          "I Am Legend"
+        ],
+        "numeric_range": [
+          500000000,
+          600000000
+        ],
+        "rule": "答案应包含我是传奇/I Am Legend，票房在5-6亿美元之间"
+      }
+    },
+    {
+      "id": 9,
+      "category": "sql_only",
+      "question": "2010年上映的电影中,票房最高的是哪部?",
+      "expected_answer": "2010年上映的电影中票房最高的是玩具总动员3,票房为1066969703.0美元(约10.67亿美元)",
+      "data_sources": [
+        "sql"
+      ],
+      "difficulty": "medium",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "玩具总动员3",
+          "Toy Story 3"
+        ],
+        "numeric_range": [
+          1000000000,
+          1100000000
+        ],
+        "rule": "答案应包含玩具总动员3/Toy Story 3，票房在10-11亿美元之间"
+      }
+    },
+    {
+      "id": 10,
+      "category": "sql_only",
+      "question": "战争类(War)电影中评分最高的是哪部?评分是多少?",
+      "expected_answer": "战争类电影中评分最高的是辛德勒的名单,评分为8.3分",
+      "data_sources": [
+        "sql"
+      ],
+      "difficulty": "medium",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "辛德勒的名单",
+          "Schindler"
+        ],
+        "numeric_range": [
+          8.0,
+          8.5
+        ],
+        "rule": "答案应包含辛德勒的名单/Schindler，评分在8.0-8.5之间"
+      }
+    },
+    {
+      "id": 11,
+      "category": "doc_only",
+      "question": "《阿凡达》电影的剧情梗概是什么?",
+      "expected_answer": "《阿凡达》讲述了人类前往潘多拉星球开采矿物,杰克·萨利作为替身战士融入纳美族,最终带领纳美族反抗人类侵略的故事",
+      "data_sources": [
+        "doc"
+      ],
+      "difficulty": "easy",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "潘多拉",
+          "纳美",
+          "杰克"
+        ],
+        "min_length": 30,
+        "rule": "答案应包含潘多拉、纳美族、杰克等关键词，长度不少于30字"
+      }
+    },
+    {
+      "id": 12,
+      "category": "doc_only",
+      "question": "《泰坦尼克号》电影的主要故事情节是什么?",
+      "expected_answer": "《泰坦尼克号》讲述了1912年泰坦尼克号沉船事件背景下,穷画家杰克和贵族少女罗丝在船上相遇相爱的故事",
+      "data_sources": [
+        "doc"
+      ],
+      "difficulty": "easy",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "泰坦尼克号",
+          "杰克",
+          "罗丝"
+        ],
+        "min_length": 30,
+        "rule": "答案应包含泰坦尼克号、杰克、罗丝等关键词"
+      }
+    },
+    {
+      "id": 13,
+      "category": "doc_only",
+      "question": "《阿甘正传》电影讲述了什么故事?",
+      "expected_answer": "《阿甘正传》讲述了智商只有75的阿甘,凭借单纯善良、坚守承诺的品格,创造出非凡人生的故事",
+      "data_sources": [
+        "doc"
+      ],
+      "difficulty": "easy",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "阿甘",
+          "智商"
+        ],
+        "min_length": 30,
+        "rule": "答案应包含阿甘、智商等关键词"
+      }
+    },
+    {
+      "id": 14,
+      "category": "doc_only",
+      "question": "《肖申克的救赎》电影的主要内容是什么?",
+      "expected_answer": "《肖申克的救赎》讲述了银行家安迪被冤入狱,在肖申克监狱中用20年时间挖隧道成功越狱的故事",
+      "data_sources": [
+        "doc"
+      ],
+      "difficulty": "easy",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "肖申克",
+          "安迪",
+          "越狱"
+        ],
+        "min_length": 30,
+        "rule": "答案应包含肖申克、安迪、越狱等关键词"
+      }
+    },
+    {
+      "id": 15,
+      "category": "doc_only",
+      "question": "《星际穿越》电影的剧情简介是什么?",
+      "expected_answer": "《星际穿越》讲述了前NASA宇航员库珀穿越虫洞寻找人类新家园的科幻冒险故事",
+      "data_sources": [
+        "doc"
+      ],
+      "difficulty": "easy",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "星际穿越",
+          "虫洞",
+          "库珀"
+        ],
+        "min_length": 30,
+        "rule": "答案应包含星际穿越、虫洞、库珀等关键词"
+      }
+    },
+    {
+      "id": 16,
+      "category": "doc_only",
+      "question": "《盗梦空间》电影讲述了什么故事?",
+      "expected_answer": "《盗梦空间》讲述了道姆·柯布带领团队在梦境中执行奠基任务,即在目标人物潜意识中植入想法的故事",
+      "data_sources": [
+        "doc"
+      ],
+      "difficulty": "easy",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "盗梦空间",
+          "柯布",
+          "梦境"
+        ],
+        "min_length": 30,
+        "rule": "答案应包含盗梦空间、柯布、梦境等关键词"
+      }
+    },
+    {
+      "id": 17,
+      "category": "doc_only",
+      "question": "《千与千寻》电影的剧情是什么?",
+      "expected_answer": "《千与千寻》讲述了10岁少女千寻随父母搬家途中误入神灵世界,为拯救变成猪的父母而在汤屋工作的成长故事",
+      "data_sources": [
+        "doc"
+      ],
+      "difficulty": "easy",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "千与千寻",
+          "千寻",
+          "汤屋"
+        ],
+        "min_length": 30,
+        "rule": "答案应包含千与千寻、千寻、汤屋等关键词"
+      }
+    },
+    {
+      "id": 18,
+      "category": "doc_only",
+      "question": "《冰雪奇缘》电影的主要情节是什么?",
+      "expected_answer": "《冰雪奇缘》讲述了拥有冰雪魔法的艾莎女王和妹妹安娜一起寻找真爱、拯救阿伦戴尔王国的故事",
+      "data_sources": [
+        "doc"
+      ],
+      "difficulty": "easy",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "冰雪奇缘",
+          "艾莎",
+          "安娜"
+        ],
+        "min_length": 30,
+        "rule": "答案应包含冰雪奇缘、艾莎、安娜等关键词"
+      }
+    },
+    {
+      "id": 19,
+      "category": "doc_only",
+      "question": "《功夫熊猫》电影讲述了什么故事?",
+      "expected_answer": "《功夫熊猫》讲述了面条店打工的熊猫阿宝被选为神龙大侠,最终战胜太郎成为功夫高手的故事",
+      "data_sources": [
+        "doc"
+      ],
+      "difficulty": "easy",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "功夫熊猫",
+          "阿宝",
+          "神龙大侠"
+        ],
+        "min_length": 30,
+        "rule": "答案应包含功夫熊猫、阿宝、神龙大侠等关键词"
+      }
+    },
+    {
+      "id": 20,
+      "category": "doc_only",
+      "question": "《辛德勒的名单》电影的主要内容是什么?",
+      "expected_answer": "《辛德勒的名单》讲述了二战期间德国商人辛德勒倾家荡产拯救1100多名犹太人的真实历史故事",
+      "data_sources": [
+        "doc"
+      ],
+      "difficulty": "easy",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "辛德勒",
+          "犹太人"
+        ],
+        "min_length": 30,
+        "rule": "答案应包含辛德勒、犹太人等关键词"
+      }
+    },
+    {
+      "id": 21,
+      "category": "kg_only",
+      "question": "詹姆斯·卡梅隆导演了哪些电影?",
+      "expected_answer": "詹姆斯·卡梅隆(James Cameron)导演了7部电影:阿凡达、泰坦尼克号、终结者2:审判日、真实的谎言、深渊、异形2、终结者",
+      "data_sources": [
+        "kg"
+      ],
+      "difficulty": "medium",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "James Cameron",
+          "阿凡达",
+          "泰坦尼克号"
+        ],
+        "min_movies": 5,
+        "rule": "答案应包含James Cameron，列出至少5部电影"
+      }
+    },
+    {
+      "id": 22,
+      "category": "kg_only",
+      "question": "汤姆·汉克斯主演了哪些评分8.0以上的电影?",
+      "expected_answer": "汤姆·汉克斯主演的评分8.0以上的电影有:绿里奇迹(8.2分)、阿甘正传(8.2分)",
+      "data_sources": [
+        "kg"
+      ],
+      "difficulty": "medium",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "Tom Hanks",
+          "汤姆·汉克斯"
+        ],
+        "min_movies": 1,
+        "rule": "答案应包含Tom Hanks/汤姆·汉克斯，列出至少1部评分8.0以上的电影"
+      }
+    },
+    {
+      "id": 23,
+      "category": "kg_only",
+      "question": "克里斯托弗·诺兰执导了哪些电影?",
+      "expected_answer": "克里斯托弗·诺兰执导了8部电影:蝙蝠侠:黑暗骑士崛起、蝙蝠侠:黑暗骑士、星际穿越、盗梦空间、蝙蝠侠:侠影之谜、失眠症、致命魔术、记忆碎片",
+      "data_sources": [
+        "kg"
+      ],
+      "difficulty": "medium",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "Christopher Nolan",
+          "克里斯托弗·诺兰"
+        ],
+        "min_movies": 5,
+        "rule": "答案应包含Christopher Nolan/克里斯托弗·诺兰，列出至少5部电影"
+      }
+    },
+    {
+      "id": 24,
+      "category": "kg_only",
+      "question": "布拉德·皮特主演了哪些评分7.5以上的电影?",
+      "expected_answer": "布拉德·皮特主演的评分7.5以上的电影有:搏击俱乐部(8.3分)、七宗罪(8.1分)、无耻混蛋(7.9分)、为奴十二年(7.9分)、偷拐抢骗(7.7分)、真实罗曼史(7.5分)",
+      "data_sources": [
+        "kg"
+      ],
+      "difficulty": "medium",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "Brad Pitt",
+          "布拉德·皮特"
+        ],
+        "min_movies": 3,
+        "rule": "答案应包含Brad Pitt/布拉德·皮特，列出至少3部评分7.5以上的电影"
+      }
+    },
+    {
+      "id": 25,
+      "category": "kg_only",
+      "question": "彼得·杰克逊执导了哪些电影?",
+      "expected_answer": "彼得·杰克逊执导了9部电影:霍比特人3:五军之战、霍比特人2:史矛革之战、金刚、霍比特人1:意外之旅、指环王1:护戒使者、可爱的骨头、指环王3:王者无敌、指环王2:双塔奇兵、罪孽天使",
+      "data_sources": [
+        "kg"
+      ],
+      "difficulty": "medium",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "Peter Jackson",
+          "彼得·杰克逊"
+        ],
+        "min_movies": 5,
+        "rule": "答案应包含Peter Jackson/彼得·杰克逊，列出至少5部电影"
+      }
+    },
+    {
+      "id": 26,
+      "category": "kg_only",
+      "question": "哪些电影属于奇幻(Fantasy)类型且评分8.0以上?",
+      "expected_answer": "奇幻类型且评分8.0以上的电影有:千与千寻(8.3分)、幽灵公主(8.2分)、绿里奇迹(8.2分)、哈尔的移动城堡(8.2分)、指环王3:王者无敌(8.1分)",
+      "data_sources": [
+        "kg"
+      ],
+      "difficulty": "hard",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "千与千寻",
+          "Fantasy",
+          "奇幻"
+        ],
+        "min_movies": 3,
+        "rule": "答案应包含奇幻类型电影，列出至少3部评分8.0以上的"
+      }
+    },
+    {
+      "id": 27,
+      "category": "kg_only",
+      "question": "阿凡达电影的主演有哪些?",
+      "expected_answer": "阿凡达电影的主演有:Sam Worthington、Zoe Saldana、Sigourney Weaver、Stephen Lang、Michelle Rodriguez等",
+      "data_sources": [
+        "kg"
+      ],
+      "difficulty": "medium",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "阿凡达"
+        ],
+        "min_actors": 3,
+        "rule": "答案应列出阿凡达的至少3位主演"
+      }
+    },
+    {
+      "id": 28,
+      "category": "kg_only",
+      "question": "摩根·弗里曼主演了哪些评分8.0以上的电影?",
+      "expected_answer": "摩根·弗里曼主演的评分8.0以上的电影有:肖申克的救赎(8.5分)、蝙蝠侠:黑暗骑士(8.2分)、七宗罪(8.1分)",
+      "data_sources": [
+        "kg"
+      ],
+      "difficulty": "medium",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "Morgan Freeman",
+          "摩根·弗里曼"
+        ],
+        "min_movies": 2,
+        "rule": "答案应包含Morgan Freeman/摩根·弗里曼，列出至少2部评分8.0以上的电影"
+      }
+    },
+    {
+      "id": 29,
+      "category": "kg_only",
+      "question": "张艺谋执导了哪些电影?",
+      "expected_answer": "张艺谋(Zhang Yimou)执导了6部电影:金陵十三钗、满城尽带黄金甲、英雄、十面埋伏、三枪拍案惊奇、归来",
+      "data_sources": [
+        "kg"
+      ],
+      "difficulty": "medium",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "Zhang Yimou",
+          "张艺谋"
+        ],
+        "min_movies": 4,
+        "rule": "答案应包含Zhang Yimou/张艺谋，列出至少4部电影"
+      }
+    },
+    {
+      "id": 30,
+      "category": "kg_only",
+      "question": "史蒂文·斯皮尔伯格执导了哪些电影?",
+      "expected_answer": "史蒂文·斯皮尔伯格执导了27部电影,包括:拯救大兵瑞恩、侏罗纪公园、辛德勒的名单、猫鼠游戏、E.T.外星人、大白鲨等",
+      "data_sources": [
+        "kg"
+      ],
+      "difficulty": "hard",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "Steven Spielberg",
+          "斯皮尔伯格"
+        ],
+        "min_movies": 20,
+        "rule": "答案应包含Steven Spielberg/斯皮尔伯格，列出至少20部电影"
+      }
+    },
+    {
+      "id": 31,
+      "category": "sql_doc",
+      "question": "评分8.0以上的电影中,哪些有中文维基百科词条?列出电影名称和评分",
+      "expected_answer": "评分8.0以上且有维基百科词条的电影包括:肖申克的救赎(8.5分)、教父(8.4分)、千与千寻(8.3分)、辛德勒的名单(8.3分)、搏击俱乐部(8.3分)、低俗小说(8.3分)、阿甘正传(8.2分)、蝙蝠侠:黑暗骑士(8.2分)等",
+      "data_sources": [
+        "sql",
+        "doc"
+      ],
+      "difficulty": "medium",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "肖申克的救赎",
+          "教父"
+        ],
+        "source_required": [
+          "sql",
+          "doc"
+        ],
+        "rule": "答案应同时包含SQL和Doc的信息"
+      }
+    },
+    {
+      "id": 32,
+      "category": "sql_doc",
+      "question": "票房最高的10部电影中,哪些的剧情可以在维基百科上找到?",
+      "expected_answer": "票房最高的10部电影中有维基百科词条的包括:阿凡达、泰坦尼克号、冰雪奇缘、速度与激情7等",
+      "data_sources": [
+        "sql",
+        "doc"
+      ],
+      "difficulty": "medium",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "阿凡达",
+          "泰坦尼克号"
+        ],
+        "source_required": [
+          "sql",
+          "doc"
+        ],
+        "rule": "答案应同时包含SQL和Doc的信息"
+      }
+    },
+    {
+      "id": 33,
+      "category": "sql_doc",
+      "question": "2010年上映的电影中,评分最高的电影的剧情简介是什么?",
+      "expected_answer": "2010年上映的电影中评分最高的是盗梦空间(8.1分),其剧情讲述了道姆·柯布带领团队在梦境中执行奠基任务的故事",
+      "data_sources": [
+        "sql",
+        "doc"
+      ],
+      "difficulty": "hard",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "盗梦空间"
+        ],
+        "source_required": [
+          "sql",
+          "doc"
+        ],
+        "rule": "答案应同时包含SQL和Doc的信息"
+      }
+    },
+    {
+      "id": 34,
+      "category": "sql_doc",
+      "question": "动画类电影中评分最高的3部电影的剧情分别是什么?",
+      "expected_answer": "动画类评分最高的3部电影:千与千寻(8.3分)讲述千寻在神灵世界成长的故事;幽灵公主(8.2分)讲述少年阿席达卡寻找解除诅咒方法的故事;哈尔的移动城堡(8.2分)讲述苏菲被施咒变成老婆婆后与哈尔相遇的故事",
+      "data_sources": [
+        "sql",
+        "doc"
+      ],
+      "difficulty": "hard",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "千与千寻"
+        ],
+        "source_required": [
+          "sql",
+          "doc"
+        ],
+        "rule": "答案应同时包含SQL和Doc的信息"
+      }
+    },
+    {
+      "id": 35,
+      "category": "sql_doc",
+      "question": "史蒂文·斯皮尔伯格执导的电影中,哪些有维基百科词条?列出电影名称和评分",
+      "expected_answer": "斯皮尔伯格执导的有维基百科词条的电影包括:辛德勒的名单(8.3分)、拯救大兵瑞恩(7.9分)、侏罗纪公园(7.6分)、猫鼠游戏(7.7分)、E.T.外星人(7.3分)、大白鲨(7.5分)等",
+      "data_sources": [
+        "sql",
+        "doc"
+      ],
+      "difficulty": "hard",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "Spielberg",
+          "斯皮尔伯格"
+        ],
+        "source_required": [
+          "sql",
+          "doc"
+        ],
+        "rule": "答案应同时包含SQL和Doc的信息"
+      }
+    },
+    {
+      "id": 36,
+      "category": "sql_doc",
+      "question": "恐怖类电影中票房最高的电影的剧情简介是什么?",
+      "expected_answer": "恐怖类票房最高的电影是我传奇(5.85亿美元),讲述了人类感染病毒变成夜行者后,前军事科学家罗伯特·内维尔寻找解药的故事",
+      "data_sources": [
+        "sql",
+        "doc"
+      ],
+      "difficulty": "hard",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "我是传奇",
+          "I Am Legend"
+        ],
+        "source_required": [
+          "sql",
+          "doc"
+        ],
+        "rule": "答案应同时包含SQL和Doc的信息"
+      }
+    },
+    {
+      "id": 37,
+      "category": "sql_doc",
+      "question": "战争类电影中评分最高的电影的剧情是什么?",
+      "expected_answer": "战争类评分最高的电影是辛德勒的名单(8.3分),讲述了二战期间德国商人辛德勒倾家荡产拯救1100多名犹太人的真实历史故事",
+      "data_sources": [
+        "sql",
+        "doc"
+      ],
+      "difficulty": "hard",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "辛德勒的名单"
+        ],
+        "source_required": [
+          "sql",
+          "doc"
+        ],
+        "rule": "答案应同时包含SQL和Doc的信息"
+      }
+    },
+    {
+      "id": 38,
+      "category": "sql_doc",
+      "question": "科幻类电影中评分最高的电影的剧情简介是什么?",
+      "expected_answer": "科幻类评分最高的电影是蝙蝠侠:黑暗骑士(8.2分)/盗梦空间(8.1分)/星际穿越(8.1分),以盗梦空间为例,讲述了道姆·柯布带领团队在梦境中执行奠基任务的故事",
+      "data_sources": [
+        "sql",
+        "doc"
+      ],
+      "difficulty": "hard",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "盗梦空间",
+          "星际穿越"
+        ],
+        "source_required": [
+          "sql",
+          "doc"
+        ],
+        "rule": "答案应同时包含SQL和Doc的信息"
+      }
+    },
+    {
+      "id": 39,
+      "category": "sql_doc",
+      "question": "克里斯托弗·诺兰执导的电影中,哪些有维基百科词条?列出电影名称和评分",
+      "expected_answer": "诺兰执导的有维基百科词条的电影包括:星际穿越(8.1分)、盗梦空间(8.1分)、致命魔术(8.0分)、记忆碎片(8.1分)、蝙蝠侠:黑暗骑士崛起(7.6分)、蝙蝠侠:侠影之谜(7.5分)",
+      "data_sources": [
+        "sql",
+        "doc"
+      ],
+      "difficulty": "hard",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "Christopher Nolan",
+          "克里斯托弗·诺兰"
+        ],
+        "source_required": [
+          "sql",
+          "doc"
+        ],
+        "rule": "答案应同时包含SQL和Doc的信息"
+      }
+    },
+    {
+      "id": 40,
+      "category": "sql_doc",
+      "question": "布拉德·皮特主演的电影中,哪些有维基百科词条?列出电影名称和评分",
+      "expected_answer": "布拉德·皮特主演的有维基百科词条的电影包括:搏击俱乐部(8.3分)、七宗罪(8.1分)、无耻混蛋(7.9分)、为奴十二年(7.9分)、偷拐抢骗(7.7分)、狂怒(7.4分)等",
+      "data_sources": [
+        "sql",
+        "doc"
+      ],
+      "difficulty": "hard",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "Brad Pitt",
+          "布拉德·皮特"
+        ],
+        "source_required": [
+          "sql",
+          "doc"
+        ],
+        "rule": "答案应同时包含SQL和Doc的信息"
+      }
+    },
+    {
+      "id": 41,
+      "category": "all_sources",
+      "question": "《阿凡达》电影的评分是多少?剧情简介是什么?导演还执导了哪些电影?",
+      "expected_answer": "阿凡达评分7.2分,讲述了人类前往潘多拉星球开采矿物、杰克·萨利带领纳美族反抗人类侵略的故事。导演詹姆斯·卡梅隆还执导了泰坦尼克号、终结者2:审判日、真实的谎言、深渊、异形2、终结者",
+      "data_sources": [
+        "sql",
+        "doc",
+        "kg"
+      ],
+      "difficulty": "hard",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "阿凡达",
+          "James Cameron",
+          "卡梅隆"
+        ],
+        "source_required": [
+          "sql",
+          "doc",
+          "kg"
+        ],
+        "rule": "答案应融合三源信息：评分、剧情、导演其他作品"
+      }
+    },
+    {
+      "id": 42,
+      "category": "all_sources",
+      "question": "《泰坦尼克号》电影的票房是多少?剧情简介是什么?主演还有哪些电影?",
+      "expected_answer": "泰坦尼克号票房18.45亿美元,讲述了1912年泰坦尼克号沉船事件背景下杰克和罗丝的爱情故事",
+      "data_sources": [
+        "sql",
+        "doc",
+        "kg"
+      ],
+      "difficulty": "hard",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "泰坦尼克号"
+        ],
+        "source_required": [
+          "sql",
+          "doc",
+          "kg"
+        ],
+        "rule": "答案应融合三源信息：票房、剧情、主演其他作品"
+      }
+    },
+    {
+      "id": 43,
+      "category": "all_sources",
+      "question": "《阿甘正传》电影的评分是多少?剧情简介是什么?导演还执导了哪些电影?",
+      "expected_answer": "阿甘正传评分8.2分,讲述了智商只有75的阿甘凭借善良品格创造出非凡人生的故事",
+      "data_sources": [
+        "sql",
+        "doc",
+        "kg"
+      ],
+      "difficulty": "hard",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "阿甘正传"
+        ],
+        "source_required": [
+          "sql",
+          "doc",
+          "kg"
+        ],
+        "rule": "答案应融合三源信息：评分、剧情、导演其他作品"
+      }
+    },
+    {
+      "id": 44,
+      "category": "all_sources",
+      "question": "《辛德勒的名单》电影的评分是多少?剧情简介是什么?导演还执导了哪些电影?",
+      "expected_answer": "辛德勒的名单评分8.3分,讲述了二战期间德国商人辛德勒拯救1100多名犹太人的真实历史故事。导演史蒂文·斯皮尔伯格还执导了拯救大兵瑞恩、侏罗纪公园、猫鼠游戏、E.T.外星人、大白鲨等27部电影",
+      "data_sources": [
+        "sql",
+        "doc",
+        "kg"
+      ],
+      "difficulty": "hard",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "辛德勒的名单",
+          "Spielberg"
+        ],
+        "source_required": [
+          "sql",
+          "doc",
+          "kg"
+        ],
+        "rule": "答案应融合三源信息：评分、剧情、导演其他作品"
+      }
+    },
+    {
+      "id": 45,
+      "category": "all_sources",
+      "question": "《侏罗纪公园》电影的票房是多少?剧情简介是什么?导演还执导了哪些电影?",
+      "expected_answer": "侏罗纪公园票房9.2亿美元,讲述了约翰·哈蒙德博士利用恐龙DNA复活恐龙建立主题公园,但恐龙失控引发危机的故事。导演史蒂文·斯皮尔伯格还执导了辛德勒的名单、拯救大兵瑞恩等27部电影",
+      "data_sources": [
+        "sql",
+        "doc",
+        "kg"
+      ],
+      "difficulty": "hard",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "侏罗纪公园"
+        ],
+        "source_required": [
+          "sql",
+          "doc",
+          "kg"
+        ],
+        "rule": "答案应融合三源信息：票房、剧情、导演其他作品"
+      }
+    },
+    {
+      "id": 46,
+      "category": "all_sources",
+      "question": "《冰雪奇缘》电影的票房是多少?剧情简介是什么?属于哪些类型?",
+      "expected_answer": "冰雪奇缘票房12.74亿美元,讲述了拥有冰雪魔法的艾莎女王和妹妹安娜一起寻找真爱、拯救阿伦戴尔王国的故事。属于动画、冒险、家庭、奇幻类型",
+      "data_sources": [
+        "sql",
+        "doc",
+        "kg"
+      ],
+      "difficulty": "hard",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "冰雪奇缘"
+        ],
+        "source_required": [
+          "sql",
+          "doc",
+          "kg"
+        ],
+        "rule": "答案应融合三源信息：票房、剧情、类型"
+      }
+    },
+    {
+      "id": 47,
+      "category": "all_sources",
+      "question": "《功夫熊猫》电影的评分是多少?剧情简介是什么?属于哪些类型?",
+      "expected_answer": "功夫熊猫评分6.9分,讲述了面条店打工的熊猫阿宝被选为神龙大侠,最终战胜太郎成为功夫高手的故事。属于动画、动作、冒险、喜剧、家庭类型",
+      "data_sources": [
+        "sql",
+        "doc",
+        "kg"
+      ],
+      "difficulty": "hard",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "功夫熊猫"
+        ],
+        "source_required": [
+          "sql",
+          "doc",
+          "kg"
+        ],
+        "rule": "答案应融合三源信息：评分、剧情、类型"
+      }
+    },
+    {
+      "id": 48,
+      "category": "all_sources",
+      "question": "《拯救大兵瑞恩》电影的评分是多少?剧情简介是什么?导演还执导了哪些电影?",
+      "expected_answer": "拯救大兵瑞恩评分7.9分,讲述了二战期间八名士兵深入敌后寻找并营救二等兵詹姆斯·瑞恩的真实故事。导演史蒂文·斯皮尔伯格还执导了辛德勒的名单、侏罗纪公园、猫鼠游戏等27部电影",
+      "data_sources": [
+        "sql",
+        "doc",
+        "kg"
+      ],
+      "difficulty": "hard",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "拯救大兵瑞恩"
+        ],
+        "source_required": [
+          "sql",
+          "doc",
+          "kg"
+        ],
+        "rule": "答案应融合三源信息：评分、剧情、导演其他作品"
+      }
+    },
+    {
+      "id": 49,
+      "category": "all_sources",
+      "question": "《盗梦空间》电影的评分是多少?剧情简介是什么?导演还执导了哪些电影?",
+      "expected_answer": "盗梦空间评分8.1分,讲述了道姆·柯布带领团队在梦境中执行奠基任务,即在目标人物潜意识中植入想法的故事。导演克里斯托弗·诺兰还执导了星际穿越、致命魔术、记忆碎片、蝙蝠侠系列等电影",
+      "data_sources": [
+        "sql",
+        "doc",
+        "kg"
+      ],
+      "difficulty": "hard",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "盗梦空间",
+          "Christopher Nolan"
+        ],
+        "source_required": [
+          "sql",
+          "doc",
+          "kg"
+        ],
+        "rule": "答案应融合三源信息：评分、剧情、导演其他作品"
+      }
+    },
+    {
+      "id": 50,
+      "category": "all_sources",
+      "question": "《星际穿越》电影的评分是多少?剧情简介是什么?导演还执导了哪些电影?",
+      "expected_answer": "星际穿越评分8.1分,讲述了前NASA宇航员库珀穿越虫洞寻找人类新家园的科幻冒险故事。导演克里斯托弗·诺兰还执导了盗梦空间、致命魔术、记忆碎片、蝙蝠侠系列等电影",
+      "data_sources": [
+        "sql",
+        "doc",
+        "kg"
+      ],
+      "difficulty": "hard",
+      "conflict": false,
+      "verification": {
+        "contains": [
+          "星际穿越",
+          "Christopher Nolan"
+        ],
+        "source_required": [
+          "sql",
+          "doc",
+          "kg"
+        ],
+        "rule": "答案应融合三源信息：评分、剧情、导演其他作品"
+      }
+    }
+  ],
+  "conflict_cases": [
+    {
+      "id": "C1",
+      "related_question_id": 2,
+      "description": "阿凡达票房数据冲突测试",
+      "conflict_source_a": {
+        "source": "sql",
+        "value": "2787965087.0美元(约27.88亿美元)"
+      },
+      "conflict_source_b": {
+        "source": "doc",
+        "value": "维基百科可能记录不同口径的票房数据(如全球票房vs北美票房)"
+      },
+      "resolution_rule": "SQL数据源权重最高(0.5),应以SQL数据为准",
+      "expected_behavior": "系统应检测到数据差异,按置信度加权规则选择SQL数据作为最终答案"
+    },
+    {
+      "id": "C2",
+      "related_question_id": 1,
+      "description": "电影评分数据冲突测试",
+      "conflict_source_a": {
+        "source": "sql",
+        "value": "肖申克的救赎评分8.5"
+      },
+      "conflict_source_b": {
+        "source": "doc",
+        "value": "维基百科可能引用不同评分系统的数据(如IMDb vs 豆瓣)"
+      },
+      "resolution_rule": "SQL数据源权重最高(0.5),应以SQL数据为准",
+      "expected_behavior": "系统应检测到评分差异,按置信度加权规则选择SQL数据作为最终答案"
+    },
+    {
+      "id": "C3",
+      "related_question_id": 41,
+      "description": "阿凡达电影信息多源冲突测试",
+      "conflict_source_a": {
+        "source": "sql",
+        "value": "评分7.2,票房27.88亿美元"
+      },
+      "conflict_source_b": {
+        "source": "kg",
+        "value": "导演为James Cameron,主演包括Sam Worthington等"
+      },
+      "conflict_source_c": {
+        "source": "doc",
+        "value": "剧情描述可能包含SQL和KG中没有的信息"
+      },
+      "resolution_rule": "各数据源提供不同维度信息,应融合而非冲突消解",
+      "expected_behavior": "系统应识别这是互补信息而非冲突信息,将三路结果融合为完整答案"
+    },
+    {
+      "id": "C4",
+      "related_question_id": 33,
+      "description": "2010年电影数据冲突测试",
+      "conflict_source_a": {
+        "source": "sql",
+        "value": "盗梦空间评分8.1,票房8.26亿美元"
+      },
+      "conflict_source_b": {
+        "source": "doc",
+        "value": "维基百科可能记录不同口径的票房或评分数据"
+      },
+      "resolution_rule": "SQL数据源权重最高(0.5),应以SQL数据为准",
+      "expected_behavior": "系统应检测到数据差异,按置信度加权规则选择SQL数据作为最终答案"
+    },
+    {
+      "id": "C5",
+      "related_question_id": 21,
+      "description": "导演信息KG实体消歧冲突测试",
+      "conflict_source_a": {
+        "source": "kg",
+        "value": "詹姆斯·卡梅隆(中文名)对应James Cameron(英文名),导演7部电影"
+      },
+      "conflict_source_b": {
+        "source": "doc",
+        "value": "文档可能使用不同名称指代同一导演"
+      },
+      "resolution_rule": "KG实体消歧机制应正确映射中英文实体名",
+      "expected_behavior": "系统应通过实体消歧正确识别'詹姆斯·卡梅隆'='James Cameron',返回正确的7部电影列表"
+    }
+  ],
+  "edge_cases": [
+    {
+      "id": "E1",
+      "category": "sql_only",
+      "question": "张学友导演了哪些电影？",
+      "expected_answer": "数据库中没有张学友作为导演的记录",
+      "data_sources": [
+        "sql"
+      ],
+      "difficulty": "easy",
+      "conflict": false,
+      "verification": {
+        "rule": "答案应明确说明没有找到相关记录，不应编造数据",
+        "contains": [
+          "没有",
+          "无",
+          "未找到"
+        ],
+        "not_contains": [
+          "张学友导演"
+        ]
+      }
+    },
+    {
+      "id": "E2",
+      "category": "kg_only",
+      "question": "终结者是哪年上映的？",
+      "expected_answer": "数据库中有多部终结者电影，需要明确具体是哪一部",
+      "data_sources": [
+        "kg"
+      ],
+      "difficulty": "medium",
+      "conflict": false,
+      "verification": {
+        "rule": "答案应识别出歧义并要求澄清，或列出多部终结者电影",
+        "contains": [
+          "终结者"
+        ],
+        "disambiguation_required": true
+      }
+    },
+    {
+      "id": "E3",
+      "category": "doc_only",
+      "question": "这部电影讲述了什么故事：一个男人在监狱中用20年时间挖隧道越狱？",
+      "expected_answer": "这是《肖申克的救赎》的剧情",
+      "data_sources": [
+        "doc"
+      ],
+      "difficulty": "medium",
+      "conflict": false,
+      "verification": {
+        "rule": "答案应识别出这是肖申克的救赎的剧情",
+        "contains": [
+          "肖申克的救赎",
+          "安迪"
+        ],
+        "min_length": 30
+      }
+    },
+    {
+      "id": "E4",
+      "category": "sql_doc",
+      "question": "2025年上映的电影有哪些？",
+      "expected_answer": "数据库中没有2025年上映的电影记录",
+      "data_sources": [
+        "sql",
+        "doc"
+      ],
+      "difficulty": "easy",
+      "conflict": false,
+      "verification": {
+        "rule": "答案应说明没有找到相关记录，不应编造数据",
+        "contains": [
+          "没有",
+          "无",
+          "未找到"
+        ],
+        "not_contains": [
+          "2025年上映"
+        ]
+      }
+    },
+    {
+      "id": "E5",
+      "category": "all_sources",
+      "question": "詹姆斯·卡梅隆导演的电影中，哪部的票房最高？剧情是什么？",
+      "expected_answer": "詹姆斯·卡梅隆导演的电影中票房最高的是阿凡达(27.88亿美元)，讲述了人类前往潘多拉星球的故事",
+      "data_sources": [
+        "sql",
+        "doc",
+        "kg"
+      ],
+      "difficulty": "hard",
+      "conflict": false,
+      "verification": {
+        "rule": "答案应融合三源信息：KG找出卡梅隆导演的电影，SQL比较票房，Doc提供剧情",
+        "contains": [
+          "阿凡达",
+          "James Cameron",
+          "卡梅隆"
+        ],
+        "source_required": [
+          "sql",
+          "doc",
+          "kg"
+        ],
+        "min_length": 50
+      }
+    }
+  ],
+  "conflict_verification": {
+    "description": "冲突消解验证标准",
+    "rules": [
+      {
+        "rule_id": "R1",
+        "name": "数值冲突验证",
+        "description": "当SQL和Doc提供不同数值时，系统应选择SQL数据（权重0.5 > 0.3）",
+        "verification_method": "检查答案中的数值是否与SQL数据源一致"
+      },
+      {
+        "rule_id": "R2",
+        "name": "信息互补验证",
+        "description": "当各数据源提供不同维度信息时，系统应融合而非冲突消解",
+        "verification_method": "检查答案是否包含来自多个数据源的信息"
+      },
+      {
+        "rule_id": "R3",
+        "name": "实体消歧验证",
+        "description": "当KG和Doc使用不同名称指代同一实体时，系统应正确识别",
+        "verification_method": "检查系统是否正确映射中英文实体名"
+      }
+    ],
+    "expected_behaviors": {
+      "C1": "系统应检测到票房数据差异，选择SQL的2787965087.0美元",
+      "C2": "系统应检测到评分数据差异，选择SQL的8.5分",
+      "C3": "系统应识别这是互补信息，融合三源结果",
+      "C4": "系统应检测到数据差异，选择SQL数据",
+      "C5": "系统应通过实体消歧正确识别'詹姆斯·卡梅隆'='James Cameron'"
+    }
+  }
+}
