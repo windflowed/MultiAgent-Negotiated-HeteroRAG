@@ -1,0 +1,2 @@
+question_id,question,expected_answer,generated_answer,category,difficulty,conflict,data_sources,response_time,confidence,sources_used,error,accuracy,completeness,conflict_resolution,human_accuracy,human_completeness,human_notes
+1,数据库中评分最高的5部电影分别是哪些?评分是多少?,评分最高的5部电影为:肖申克的救赎(8.5分)、教父(8.4分)、千与千寻(8.3分)、教父2(8.3分)、辛德勒的名单(8.3分),评分最高的5部电影为:肖申克的救赎(8.5分)、教父(8.4分),,,,,0.00,0.00,,,0.80,0.60,0.00,,,
