@@ -123,3 +123,117 @@ if __name__ == "__main__":
         print(f"  电影名: {chunks[0].metadata['movie_name']}")
         print(f"  内容长度: {len(chunks[0].page_content)} 字符")
         print(f"  内容预览: {chunks[0].page_content[:100]}...")
+
+
+def validate_sql_database() -> dict:
+    """
+    校验 SQLite 数据库连接
+
+    Returns:
+        包含数据库统计信息的字典
+    """
+    from src.utils.common import SQLiteDatabase
+
+    db = SQLiteDatabase()
+    tables = db.get_tables()
+
+    stats = {"tables": len(tables), "movies": 0}
+
+    for table in tables:
+        result = db.execute_query(f"SELECT COUNT(*) as count FROM {table}")
+        if result:
+            count = result[0].get("count", 0)
+            if table == "movies":
+                stats["movies"] = count
+
+    return stats
+
+
+def build_all_datastores() -> dict:
+    """
+    一键构建所有数据存储
+
+    Returns:
+        包含构建统计信息的字典
+    """
+    from src.utils.chroma_utils import build_vector_store
+    from src.utils.bm25_utils import BM25Retriever
+    from src.utils.kg_utils import build_knowledge_graph
+
+    stats = {}
+
+    # 1. 加载和切分文档
+    print("\n[1/3] 加载和切分文档...")
+    documents = load_documents()
+    chunks = split_documents(documents)
+    stats["documents"] = len(documents)
+    stats["chunks"] = len(chunks)
+
+    # 2. 构建向量库
+    print("\n[2/3] 构建 ChromaDB 向量库...")
+    vector_store = build_vector_store(chunks)
+    stats["vector_store"] = "已构建"
+
+    # 3. 构建 BM25 索引
+    print("\n[3/3] 构建 BM25 关键词索引...")
+    bm25_retriever = BM25Retriever()
+    bm25_retriever.build_index(chunks)
+    stats["bm25"] = "已构建"
+
+    # 4. 构建知识图谱
+    print("\n[4/4] 构建 NetworkX 知识图谱...")
+    kg = build_knowledge_graph()
+    stats["kg_nodes"] = kg.graph.number_of_nodes()
+    stats["kg_edges"] = kg.graph.number_of_edges()
+
+    return stats
+
+
+def run_preprocessing():
+    """
+    主预处理入口函数
+    """
+    print("=" * 60)
+    print("MultiAgent-Negotiated-HeteroRAG 数据预处理")
+    print("=" * 60)
+
+    # Step 1: 校验 SQLite 数据库
+    print("\n[Step 1] 校验 SQLite 数据库...")
+    try:
+        sql_stats = validate_sql_database()
+        print(f"  [OK] 数据库连接成功")
+        print(f"  [OK] 表数量: {sql_stats['tables']}")
+        print(f"  [OK] 电影数量: {sql_stats['movies']}")
+    except Exception as e:
+        print(f"  [FAIL] 数据库校验失败: {e}")
+        return
+
+    # Step 2: 构建所有数据存储
+    print("\n[Step 2] 构建数据存储...")
+    try:
+        ds_stats = build_all_datastores()
+        print(f"  [OK] 文档数量: {ds_stats['documents']}")
+        print(f"  [OK] 文本块数量: {ds_stats['chunks']}")
+        print(f"  [OK] 向量库: {ds_stats['vector_store']}")
+        print(f"  [OK] BM25索引: {ds_stats['bm25']}")
+        print(f"  [OK] 知识图谱节点数: {ds_stats['kg_nodes']}")
+        print(f"  [OK] 知识图谱边数: {ds_stats['kg_edges']}")
+    except Exception as e:
+        print(f"  [FAIL] 数据存储构建失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return
+
+    # 完成
+    print("\n" + "=" * 60)
+    print("预处理完成！")
+    print("=" * 60)
+    print("\n数据统计:")
+    print(f"  电影数量: {sql_stats['movies']}")
+    print(f"  文档数量: {ds_stats['documents']}")
+    print(f"  文本块数量: {ds_stats['chunks']}")
+    print(f"  知识图谱实体数: {ds_stats['kg_nodes']}")
+
+
+if __name__ == "__main__":
+    run_preprocessing()
