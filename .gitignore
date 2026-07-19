@@ -242,3 +242,6 @@ models/
 
 # 项目日志目录
 data/logs/
+
+# Wikipedia 文档（体积大，可通过脚本重新生成）
+data/documents/
