@@ -216,3 +216,32 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# 忽略根目录docs文件夹
+docs/
+# 忽略根目录AGENTS.md
+AGENTS.md
+
+# ===== 项目专属忽略项 =====
+
+# ChromaDB 向量库
+chroma_db/
+
+# SQLite 数据库文件
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# 原始数据集（TMDB CSV 等，保留预处理脚本）
+data/raw/*.csv
+data/raw/*.zip
+
+# 嵌入模型目录
+models/
+
+# 项目日志目录
+data/logs/
+
+# Wikipedia 文档（体积大，可通过脚本重新生成）
+data/documents/
