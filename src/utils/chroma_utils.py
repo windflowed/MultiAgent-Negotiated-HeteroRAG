@@ -8,6 +8,7 @@ from typing import List, Dict, Any, Optional
 
 import chromadb
 from chromadb.config import Settings
+from chromadb.utils import embedding_functions
 
 from src.utils.common import load_config, get_chroma_db_dir
 
@@ -26,9 +27,16 @@ class VectorStore:
         self.db_path = Path(config["CHROMA_DB_DIR"])
         self.db_path.mkdir(parents=True, exist_ok=True)
 
+        # 使用 BGE-small-zh-v1.5 中文嵌入模型
+        self.embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
+            model_name="BAAI/bge-small-zh-v1.5",
+            device="cpu"
+        )
+
         self.client = chromadb.PersistentClient(path=str(self.db_path))
         self.collection = self.client.get_or_create_collection(
             collection_name,
+            embedding_function=self.embedding_fn,
             metadata={"hnsw:space": "cosine"}
         )
 
