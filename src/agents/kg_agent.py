@@ -31,6 +31,9 @@ class KGAgent:
         except Exception:
             print("知识图谱未找到，需要先构建")
 
+        # 构建实体映射表
+        self._entity_mapping = self._build_entity_mapping()
+
         if llm is None:
             from langchain_openai import ChatOpenAI
             self.llm = ChatOpenAI(
@@ -42,6 +45,52 @@ class KGAgent:
         else:
             self.llm = llm
 
+    def _build_entity_mapping(self) -> Dict[str, str]:
+        """
+        从知识图谱节点中构建中文名→英文名的映射表
+
+        Returns:
+            中文名→英文名的映射字典
+        """
+        mapping = {}
+
+        if self.kg.graph.number_of_nodes() == 0:
+            return mapping
+
+        # 为演员和导演节点构建映射
+        for node, attrs in self.kg.graph.nodes(data=True):
+            node_type = attrs.get("type", "")
+            if node_type in ["actor", "director"]:
+                # node 本身是英文名，需要找对应的中文名
+                # 通过查询关联的电影来推断，或者使用简单的音译映射
+                # 这里先建立英文名→英文名的自映射，后续通过查询补充
+                mapping[node.lower()] = node
+
+        return mapping
+
+    def _get_entity_list_for_prompt(self) -> str:
+        """
+        获取实体列表供 Prompt 使用（限制长度避免 token 过多）
+
+        Returns:
+            格式化的实体列表字符串
+        """
+        if not self.kg.graph.number_of_nodes():
+            return "（暂无可用实体列表）"
+
+        # 收集演员和导演节点
+        entities = []
+        for node, attrs in self.kg.graph.nodes(data=True):
+            node_type = attrs.get("type", "")
+            if node_type in ["actor", "director"]:
+                entities.append(node)
+
+            # 限制列表长度
+            if len(entities) >= 100:
+                break
+
+        return "\n".join(entities) if entities else "（暂无可用实体列表）"
+
     def _extract_entities_with_llm(self, query: str) -> List[Dict[str, str]]:
         """
         使用 LLM 从查询中提取实体
@@ -50,9 +99,10 @@ class KGAgent:
             query: 用户查询
 
         Returns:
-            实体列表 [{"name": "实体名", "type": "实体类型"}]
+            实体列表 [{"name": "实体名", "name_en": "英文名", "type": "实体类型"}]
         """
-        prompt = KG_ENTITY_LINK_PROMPT.format(query=query)
+        entity_list = self._get_entity_list_for_prompt()
+        prompt = KG_ENTITY_LINK_PROMPT.format(query=query, entity_list=entity_list)
 
         try:
             response = self.llm.invoke(prompt)
@@ -62,12 +112,93 @@ class KGAgent:
             json_match = re.search(r'\{.*\}', content, re.DOTALL)
             if json_match:
                 result = json.loads(json_match.group())
-                return result.get("entities", [])
+                raw_entities = result.get("entities", [])
+
+                # 进行实体消歧，将中文名转换为 KG 中的英文名
+                return self._disambiguate_entities(raw_entities)
         except Exception as e:
             print(f"LLM 实体提取失败: {e}")
 
         # 回退：使用简单规则提取
         return self._extract_entities_with_rules(query)
+
+    def _disambiguate_entities(
+        self, entities: List[Dict[str, str]]
+    ) -> List[Dict[str, str]]:
+        """
+        实体消歧：将提取的中文实体名转换为 KG 中的英文节点名
+
+        Args:
+            entities: LLM 提取的实体列表
+
+        Returns:
+            消歧后的实体列表
+        """
+        if self.kg.graph.number_of_nodes() == 0:
+            return entities
+
+        disambiguated = []
+
+        for entity in entities:
+            name = entity.get("name", "")
+            name_en = entity.get("name_en", "")
+            entity_type = entity.get("type", "")
+
+            # 电影类型：KG 中使用中文名，直接使用 name 查询
+            if entity_type == "movie":
+                if name in self.kg.graph:
+                    disambiguated.append({
+                        "name": name,
+                        "name_en": name,  # 电影使用中文名
+                        "type": entity_type
+                    })
+                else:
+                    disambiguated.append(entity)
+                continue
+
+            # 对于演员和导演，优先使用英文名
+            if entity_type in ["actor", "director"] and name_en:
+                # 检查英文名是否在 KG 中
+                if name_en in self.kg.graph:
+                    disambiguated.append({
+                        "name": name,
+                        "name_en": name_en,
+                        "type": entity_type
+                    })
+                    continue
+
+            # 尝试直接使用英文名匹配
+            if name_en and name_en in self.kg.graph:
+                disambiguated.append({
+                    "name": name,
+                    "name_en": name_en,
+                    "type": entity_type
+                })
+                continue
+
+            # 尝试大小写不敏感匹配
+            if name_en:
+                name_en_lower = name_en.lower()
+                for node in self.kg.graph.nodes():
+                    if node.lower() == name_en_lower:
+                        disambiguated.append({
+                            "name": name,
+                            "name_en": node,  # 使用 KG 中的实际名称
+                            "type": entity_type
+                        })
+                        break
+                else:
+                    # 未找到匹配，保留原始信息
+                    disambiguated.append(entity)
+            else:
+                # 无英文名，尝试直接匹配
+                if name in self.kg.graph:
+                    disambiguated.append(entity)
+                else:
+                    # 保留原始信息
+                    disambiguated.append(entity)
+
+        return disambiguated
 
     def _extract_entities_with_rules(self, query: str) -> List[Dict[str, str]]:
         """
@@ -86,7 +217,7 @@ class KGAgent:
             for node in self.kg.graph.nodes():
                 if node in query:
                     node_type = self.kg.graph.nodes[node].get("type", "unknown")
-                    entities.append({"name": node, "type": node_type})
+                    entities.append({"name": node, "name_en": node, "type": node_type})
 
         return entities
 
@@ -189,7 +320,7 @@ class KGAgent:
         }
 
         try:
-            # 1. 实体链接
+            # 1. 实体链接（包含消歧）
             entities = self._extract_entities_with_llm(natural_language_query)
             result["entities_found"] = entities
 
@@ -203,11 +334,11 @@ class KGAgent:
             )
             result["query_type"] = query_type
 
-            # 3. 执行查询
+            # 3. 执行查询 - 优先使用 name_en 查询 KG
             if query_type == "common_neighbors" and len(entities) >= 2:
-                # 共同邻居查询
-                entity1 = entities[0]["name"]
-                entity2 = entities[1]["name"]
+                # 共同邻居查询 - 使用英文名
+                entity1 = entities[0].get("name_en") or entities[0]["name"]
+                entity2 = entities[1].get("name_en") or entities[1]["name"]
                 common = self.kg.query_common_neighbors(entity1, entity2)
 
                 for neighbor in common:
@@ -221,17 +352,17 @@ class KGAgent:
                     ))
 
             elif query_type == "two_hop":
-                # 两跳查询
-                entity_name = entities[0]["name"]
+                # 两跳查询 - 使用英文名
+                entity_name = entities[0].get("name_en") or entities[0]["name"]
                 paths = self.kg.query_two_hop(entity_name)
 
                 for path in paths[:10]:  # 限制返回数量
                     result["triples"].append(self._format_path(path))
 
             else:
-                # 单跳查询
+                # 单跳查询 - 使用英文名
                 for entity in entities[:3]:  # 限制实体数量
-                    entity_name = entity["name"]
+                    entity_name = entity.get("name_en") or entity["name"]
                     triples = self.kg.query_single_hop(entity_name)
 
                     for triple in triples[:10]:  # 限制返回数量
