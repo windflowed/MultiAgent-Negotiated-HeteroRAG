@@ -65,13 +65,19 @@ class SQLQueryAgent:
 
     def _generate_sql_with_cot(self, query: str) -> Dict[str, Any]:
         """
-        使用 CoT 思维链生成 SQL 查询
+        使用 CoT（Chain-of-Thought）思维链生成 SQL 查询
+
+        CoT 流程：
+        1. 获取数据库所有表结构（含建表语句和行数统计）
+        2. 将表结构和用户查询填充到 SQL_COT_PROMPT 模板
+        3. LLM 推理：先生成查询思路分析，再输出可执行 SQL 语句
+        4. 通过正则提取 SQL（优先提取 ```sql 代码块，其次提取 SELECT 语句）
 
         Args:
             query: 自然语言查询
 
         Returns:
-            包含 SQL 和思考过程的字典
+            {"thinking": LLM完整响应, "sql": 提取的SQL语句}
         """
         table_schema = self._get_table_schema()
         prompt = SQL_COT_PROMPT.format(
