@@ -1,0 +1,32 @@
+# 核心框架
+langchain==0.3.0
+langgraph==0.2.0
+langchain-community==0.3.0
+
+# 数据库
+chromadb==0.5.0
+sqlalchemy==2.0.30
+
+# 图计算
+networkx==3.3
+
+# 嵌入模型
+sentence-transformers==2.7.0
+
+# 关键词检索
+rank-bm25==0.2.2
+
+# 重排序（用于 BGE-Reranker）
+transformers>=4.30.0
+
+# Wikipedia
+wikipedia-api>=0.6.0
+
+# 前端
+gradio==4.44.0
+
+# 配置管理
+python-dotenv==1.0.1
+
+# HTTP 请求（用于 TMDB API 调用）
+requests>=2.31.0
