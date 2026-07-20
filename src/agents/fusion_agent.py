@@ -585,7 +585,14 @@ class FusionAgent:
         kg_results: Optional[Dict] = None
     ) -> Dict[str, Any]:
         """
-        执行多源检索结果融合
+        执行多源检索结果融合（核心协商融合算法入口）
+
+        算法流程（5步）：
+        1. 三元组统一抽取：将 SQL/文档/KG 三类异构结果统一转化为(主体, 属性, 值)标准格式
+        2. 冲突检测：两两比对三元组，数值偏差>5%或文本描述矛盾判定为冲突
+        3. 置信度加权消解：最终置信度 = 数据源基础权重 × 单条结果置信度，取置信度最高者
+        4. 置信度计算：取所有消解后三元组加权置信度的平均值
+        5. 上下文构建：按数据源分类整理消解后的三元组，附带来源标签
 
         Args:
             query: 原始查询
@@ -594,7 +601,7 @@ class FusionAgent:
             kg_results: 知识图谱检索结果
 
         Returns:
-            融合结果字典
+            融合结果字典，包含 fused_context, triples, conflicts, source_stats, confidence
         """
         result = {
             "success": False,
@@ -607,6 +614,7 @@ class FusionAgent:
         }
 
         try:
+            # 第1步：从各数据源抽取三元组（SQL行→三元组、文档→LLM批量抽取、KG→直接映射）
             # 1. 从各数据源抽取三元组
             all_triples = self._extract_triples_from_results(
                 sql_results, doc_results, kg_results, query=query

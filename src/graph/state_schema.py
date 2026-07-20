@@ -2,6 +2,14 @@
 全局状态 Schema 定义
 定义 AgentState 类型，规范所有字段的名称、类型、含义
 覆盖原始输入、路由结果、检索结果、融合中间结果、最终输出全流程
+
+状态流转（字段生命周期）：
+  router_node        → 写入 routed_sources, routing_reason, routing_confidence
+  sql_retriever_node → 读取 routed_sources，写入 sql_results
+  doc_retriever_node → 读取 routed_sources，写入 doc_results
+  kg_retriever_node  → 读取 routed_sources，写入 kg_results
+  fusion_node        → 读取 sql/doc/kg_results，写入 fused_context, triples, conflicts, source_stats
+  generator_node     → 读取 fused_context, source_stats，写入 answer, sources, final_confidence
 """
 
 from typing import TypedDict, Annotated, List, Optional, Dict, Any

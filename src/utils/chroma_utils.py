@@ -27,7 +27,11 @@ class VectorStore:
         self.db_path = Path(config["CHROMA_DB_DIR"])
         self.db_path.mkdir(parents=True, exist_ok=True)
 
-        # 使用 BGE-small-zh-v1.5 中文嵌入模型
+        # 使用 BGE-small-zh-v1.5 中文优化嵌入模型（512维向量）
+        # - 选型理由：专为中文语义检索优化，CPU 即可运行，适合本地部署
+        # - 接入方式：通过 ChromaDB 内置的 SentenceTransformerEmbeddingFunction 封装，
+        #   无需手动加载 sentence-transformers 模型，ChromaDB 自动管理嵌入生成
+        # - 距离度量：cosine 余弦距离（hnsw:space = cosine）
         self.embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
             model_name="BAAI/bge-small-zh-v1.5",
             device="cpu"

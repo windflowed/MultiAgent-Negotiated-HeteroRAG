@@ -53,10 +53,17 @@ class KGAgent:
 
     def _build_entity_mapping(self) -> Dict[str, str]:
         """
-        从知识图谱节点中构建中文名→英文名的映射表
+        从知识图谱节点中构建实体名称映射表
+
+        构建逻辑：
+        遍历 KG 中所有 actor 和 director 类型的节点（节点本身为英文名，如 "James Cameron"），
+        将 lowercased 英文名 → 原始英文名 存入映射表。
+        此映射用于后续实体消歧时的快速查找（_disambiguate_entities 方法中调用）。
+
+        注：当前为英文名自映射，后续可扩展为中文名→英文名的语义映射。
 
         Returns:
-            中文名→英文名的映射字典
+            {lowered_english_name: original_english_name} 的映射字典
         """
         mapping = {}
 
@@ -132,13 +139,22 @@ class KGAgent:
         self, entities: List[Dict[str, str]]
     ) -> List[Dict[str, str]]:
         """
-        实体消歧：将提取的中文实体名转换为 KG 中的英文节点名
+        实体消歧：将 LLM 提取的中文实体名转换为 KG 中的实际节点名
+
+        消歧策略（按优先级下降）：
+        1. 电影类型：KG 中存储中文名，直接用 entity["name"] 在图谱中查找
+        2. 演员/导演精确匹配：优先使用 entity["name_en"]（英文名）在 KG 中精确查找
+        3. 大小写不敏感匹配：name_en 转小写后遍历 KG 节点进行大小写不敏感比对
+        4. 回退策略：无 name_en 时再用 entity["name"]（中文名）直接查找；均失败则保留原始实体信息
+
+        示例：用户查询"詹姆斯·卡梅隆"，LLM 提取 name_en="James Cameron"，
+        经此方法后匹配到 KG 中 "James Cameron" 节点，后续图谱查询可正常运行。
 
         Args:
-            entities: LLM 提取的实体列表
+            entities: LLM 提取的实体列表，每个实体含 name（中文名）、name_en（英文名）、type（类型）
 
         Returns:
-            消歧后的实体列表
+            消歧后的实体列表，name_en 已对齐到 KG 实际节点名
         """
         if not self.kg or self.kg.graph.number_of_nodes() == 0:
             return entities

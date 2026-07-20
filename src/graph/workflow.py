@@ -299,6 +299,14 @@ def build_workflow():
     """
     构建 LangGraph 工作流
 
+    工作流拓扑（DAG结构）：
+      START → router
+      router → conditional → [sql_retriever, doc_retriever, kg_retriever]（条件边，仅激活路由指定的节点）
+      sql_retriever  → fusion
+      doc_retriever  → fusion
+      kg_retriever   → fusion
+      fusion → generator → END
+
     Returns:
         编译后的工作流应用实例
     """
