@@ -2,6 +2,7 @@
 工作流节点函数封装
 将 6 个 Agent 封装为 LangGraph 节点函数，输入 state，输出更新后的 state 字典
 包含 StateGraph 构建与编译
+使用模块级单例 Agent 避免重复加载重资源
 """
 
 from typing import Dict, Any, List
@@ -9,12 +10,83 @@ from typing import Dict, Any, List
 from langgraph.graph import StateGraph, END, START
 
 from src.graph.state_schema import AgentState
+
+# 导入单例获取函数（在文件后定义，这里前置声明避免循环导入）
 from src.agents.router_agent import create_router_agent
 from src.agents.sql_agent import create_sql_agent_instance
 from src.agents.doc_retriever import create_doc_retriever_agent
 from src.agents.kg_agent import create_kg_agent
 from src.agents.fusion_agent import create_fusion_agent
 from src.agents.answer_generator import create_answer_generator
+
+# 导入单例资源获取函数
+from src.utils.common import get_sqlite_db
+from src.utils.chroma_utils import get_vector_store
+from src.utils.bm25_utils import get_bm25_retriever
+from src.utils.kg_utils import get_knowledge_graph
+
+# 模块级 Agent 单例（延迟初始化）
+_router_agent = None
+_sql_agent = None
+_doc_agent = None
+_kg_agent = None
+_fusion_agent = None
+_answer_generator = None
+
+
+def get_router_agent():
+    """获取路由 Agent 单例"""
+    global _router_agent
+    if _router_agent is None:
+        _router_agent = create_router_agent()
+    return _router_agent
+
+
+def get_sql_agent():
+    """获取 SQL Agent 单例，共享数据库连接"""
+    global _sql_agent
+    if _sql_agent is None:
+        _sql_agent = create_sql_agent_instance(db=get_sqlite_db())
+    return _sql_agent
+
+
+def get_doc_agent():
+    """获取文档检索 Agent 单例，复用向量库和 BM25"""
+    global _doc_agent
+    if _doc_agent is None:
+        _doc_agent = create_doc_retriever_agent(
+            vector_store=None,  # 由 create_doc_retriever_agent 内部通过 get_vector_store() 获取
+            bm25_retriever=None,  # 同上
+            use_reranker=False
+        )
+    return _doc_agent
+
+
+def get_kg_agent():
+    """获取知识图谱 Agent 单例，共享知识图谱和数据库连接"""
+    global _kg_agent
+    if _kg_agent is None:
+        _kg_agent = create_kg_agent(
+            kg=None,  # 由 create_kg_agent 内部通过 get_knowledge_graph() 获取
+            db=get_sqlite_db()  # 共享同一个 SQLiteDatabase 实例
+        )
+    return _kg_agent
+
+
+def get_fusion_agent():
+    """获取融合 Agent 单例"""
+    global _fusion_agent
+    if _fusion_agent is None:
+        _fusion_agent = create_fusion_agent()
+    return _fusion_agent
+
+
+def get_answer_generator():
+    """获取答案生成 Agent 单例"""
+    global _answer_generator
+    if _answer_generator is None:
+        _answer_generator = create_answer_generator()
+    return _answer_generator
 
 
 def router_node(state: AgentState) -> Dict[str, Any]:
@@ -28,7 +100,7 @@ def router_node(state: AgentState) -> Dict[str, Any]:
         更新后的状态字典
     """
     query = state["query"]
-    router_agent = create_router_agent()
+    router_agent = get_router_agent()
 
     try:
         result = router_agent.route(query)
@@ -60,7 +132,7 @@ def sql_retriever_node(state: AgentState) -> Dict[str, Any]:
         return {"sql_results": None}
 
     query = state["query"]
-    sql_agent = create_sql_agent_instance()
+    sql_agent = get_sql_agent()
 
     try:
         result = sql_agent.query(query)
@@ -89,7 +161,7 @@ def doc_retriever_node(state: AgentState) -> Dict[str, Any]:
         return {"doc_results": None}
 
     query = state["query"]
-    doc_agent = create_doc_retriever_agent(use_reranker=False)
+    doc_agent = get_doc_agent()
 
     try:
         result = doc_agent.retrieve(query, top_k=5)
@@ -118,7 +190,7 @@ def kg_retriever_node(state: AgentState) -> Dict[str, Any]:
         return {"kg_results": None}
 
     query = state["query"]
-    kg_agent = create_kg_agent()
+    kg_agent = get_kg_agent()
 
     try:
         result = kg_agent.query(query)
@@ -148,7 +220,7 @@ def fusion_node(state: AgentState) -> Dict[str, Any]:
     doc_results = state.get("doc_results")
     kg_results = state.get("kg_results")
 
-    fusion_agent = create_fusion_agent()
+    fusion_agent = get_fusion_agent()
 
     try:
         result = fusion_agent.fuse(query, sql_results, doc_results, kg_results)
@@ -182,7 +254,7 @@ def generator_node(state: AgentState) -> Dict[str, Any]:
     fused_context = state.get("fused_context", "")
     source_stats = state.get("source_stats", {})
 
-    answer_generator = create_answer_generator()
+    answer_generator = get_answer_generator()
 
     try:
         result = answer_generator.generate(query, fused_context, source_stats)

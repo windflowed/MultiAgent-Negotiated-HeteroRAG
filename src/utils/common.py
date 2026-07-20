@@ -234,3 +234,20 @@ if __name__ == "__main__":
             print(f"  {table}: {info['row_count']} 行, {len(info['columns'])} 列")
     except Exception as e:
         print(f"  连接失败: {e}")
+
+
+# 模块级单例：SQLite 数据库
+_sqlite_db_singleton = None
+
+
+def get_sqlite_db() -> SQLiteDatabase:
+    """
+    获取 SQLite 数据库单例，延迟加载
+
+    Returns:
+        SQLiteDatabase 单例实例
+    """
+    global _sqlite_db_singleton
+    if _sqlite_db_singleton is None:
+        _sqlite_db_singleton = SQLiteDatabase()
+    return _sqlite_db_singleton

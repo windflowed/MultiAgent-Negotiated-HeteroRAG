@@ -195,3 +195,23 @@ if __name__ == "__main__":
             print(f"  距离: {r['distance']:.4f}")
             print(f"  内容: {r['document'][:100]}...")
             print()
+
+
+# 模块级单例：向量库
+_vector_store_singleton = None
+
+
+def get_vector_store(collection_name: str = "documents") -> VectorStore:
+    """
+    获取向量库单例，延迟加载
+
+    Args:
+        collection_name: 集合名称
+
+    Returns:
+        VectorStore 单例实例
+    """
+    global _vector_store_singleton
+    if _vector_store_singleton is None:
+        _vector_store_singleton = VectorStore(collection_name)
+    return _vector_store_singleton

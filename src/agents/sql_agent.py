@@ -14,15 +14,16 @@ from src.utils.prompts import SQL_COT_PROMPT, SQL_ERROR_FIX_PROMPT
 class SQLQueryAgent:
     """SQL 查询 Agent，支持自然语言转 SQL 查询、CoT 思维链、错误重试"""
 
-    def __init__(self, llm=None):
+    def __init__(self, db=None, llm=None):
         """
         初始化 SQL 查询 Agent
 
         Args:
+            db: 数据库连接实例，为 None 时使用单例
             llm: 语言模型实例，为 None 时从配置创建
         """
         self.config = load_config()
-        self.db = SQLiteDatabase()
+        self.db = db
 
         if llm is None:
             from langchain_openai import ChatOpenAI
@@ -175,9 +176,16 @@ class SQLQueryAgent:
         return result
 
 
-def create_sql_agent_instance() -> SQLQueryAgent:
-    """创建 SQL 查询 Agent 实例"""
-    return SQLQueryAgent()
+def create_sql_agent_instance(db=None) -> SQLQueryAgent:
+    """创建 SQL 查询 Agent 实例
+
+    Args:
+        db: 数据库连接实例，为 None 时使用单例
+
+    Returns:
+        SQLQueryAgent 实例
+    """
+    return SQLQueryAgent(db=db)
 
 
 if __name__ == "__main__":

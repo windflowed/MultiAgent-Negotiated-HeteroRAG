@@ -193,3 +193,39 @@ if __name__ == "__main__":
             print(f"  分数: {r['score']:.4f}")
             print(f"  内容: {r['document'][:100]}...")
             print()
+
+
+# 模块级单例：BM25 检索器
+_bm25_retriever_singleton = None
+
+
+def get_bm25_retriever() -> BM25Retriever:
+    """
+    获取 BM25 检索器单例，延迟加载
+
+    Returns:
+        BM25Retriever 单例实例
+    """
+    global _bm25_retriever_singleton
+    if _bm25_retriever_singleton is None:
+        _bm25_retriever_singleton = BM25Retriever()
+        _bm25_retriever_singleton.load()
+    return _bm25_retriever_singleton
+
+
+# 模块级单例：BM25 检索器
+_bm25_retriever_singleton = None
+
+
+def get_bm25_retriever() -> BM25Retriever:
+    """
+    获取 BM25 检索器单例，延迟加载
+
+    Returns:
+        BM25Retriever 单例实例
+    """
+    global _bm25_retriever_singleton
+    if _bm25_retriever_singleton is None:
+        _bm25_retriever_singleton = BM25Retriever()
+        _bm25_retriever_singleton.load()
+    return _bm25_retriever_singleton

@@ -185,6 +185,9 @@ def build_all_datastores() -> dict:
     kg = build_knowledge_graph()
     stats["kg_nodes"] = kg.graph.number_of_nodes()
     stats["kg_edges"] = kg.graph.number_of_edges()
+    # 保存到 pickle 文件，供运行时加载
+    kg.save()
+    stats["kg"] = "已构建并已保存"
 
     return stats
 
