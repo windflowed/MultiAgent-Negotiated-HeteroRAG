@@ -8,9 +8,10 @@ import re
 from typing import Dict, List, Any, Optional, Tuple
 from collections import defaultdict
 
-from src.utils.common import load_config
+from src.utils.common import load_config, get_sqlite_db
 from src.utils.prompts import (
     TRIPLE_EXTRACTION_PROMPT,
+    TRIPLE_BATCH_EXTRACTION_PROMPT,
     CONFLICT_DETECTION_PROMPT,
     FUSION_WEIGHTED_PROMPT
 )
@@ -72,11 +73,69 @@ class FusionAgent:
 
         return []
 
+    def _extract_triples_batch(
+        self,
+        doc_texts: List[str],
+        doc_confidences: List[float]
+    ) -> List[Dict[str, Any]]:
+        """
+        批量从文档文本中抽取三元组（单次 LLM 调用），
+        失败时回退为用文档原文作为"描述三元组"
+
+        Args:
+            doc_texts: 文档文本列表（最多3篇）
+            doc_confidences: 对应的置信度列表
+
+        Returns:
+            三元组列表（带 source="doc"）
+        """
+        if not doc_texts:
+            return []
+
+        # 构建批量提取文本（每段文档加编号前缀）
+        numbered_texts = []
+        for i, text in enumerate(doc_texts):
+            truncated = text[:400]
+            numbered_texts.append(f"[文档{i+1}] {truncated}")
+        combined = "\n\n".join(numbered_texts)
+
+        prompt = TRIPLE_BATCH_EXTRACTION_PROMPT.format(doc_texts=combined)
+
+        triples = []
+        try:
+            response = self.llm.invoke(prompt)
+            content = response.content
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                result = json.loads(json_match.group())
+                raw_triples = result.get("triples", [])
+                # 标记来源为 doc
+                for t in raw_triples:
+                    t["source"] = "doc"
+                    t["confidence"] = doc_confidences[0] if doc_confidences else 0.7
+                triples = raw_triples
+        except Exception as e:
+            triples = []
+
+        # 如果批量抽取完全失败，每篇文档生成一条"描述三元组"作为 fallback
+        if not triples:
+            for i, text in enumerate(doc_texts):
+                triples.append({
+                    "subject": "文档片段",
+                    "predicate": "内容摘要",
+                    "object": text[:200],
+                    "confidence": doc_confidences[i] if i < len(doc_confidences) else 0.6,
+                    "source": "doc"
+                })
+
+        return triples
+
     def _extract_triples_from_results(
         self,
         sql_results: Optional[Dict] = None,
         doc_results: Optional[Dict] = None,
-        kg_results: Optional[Dict] = None
+        kg_results: Optional[Dict] = None,
+        query: str = ""
     ) -> Dict[str, List[Dict]]:
         """
         从各数据源结果中抽取三元组
@@ -93,7 +152,7 @@ class FusionAgent:
 
         # 从 SQL 结果抽取三元组
         if sql_results and sql_results.get("success") and sql_results.get("data"):
-            for row in sql_results["data"][:5]:  # 限制数量
+            for row in sql_results["data"][:5]:
                 for key, value in row.items():
                     if value is not None:
                         all_triples["sql"].append({
@@ -104,27 +163,195 @@ class FusionAgent:
                             "source": "sql"
                         })
 
-        # 从文档结果抽取三元组
+        # 从文档结果批量抽取三元组（单次 LLM 调用，最多取前3篇文档）
         if doc_results and doc_results.get("success") and doc_results.get("results"):
-            for doc in doc_results["results"][:5]:
-                triples = self._extract_triples_from_text(doc.get("document", ""))
-                for triple in triples:
-                    triple["confidence"] = doc.get("confidence", 0.7)
-                    triple["source"] = "doc"
-                all_triples["doc"].extend(triples)
+            doc_list = doc_results["results"][:3]
+            doc_texts = [d.get("document", "") for d in doc_list]
+            doc_confs = [d.get("confidence", 0.7) for d in doc_list]
+            doc_triples = self._extract_triples_batch(doc_texts, doc_confs)
+            all_triples["doc"].extend(doc_triples)
 
         # 从知识图谱结果抽取三元组
         if kg_results and kg_results.get("success") and kg_results.get("triples"):
-            for triple in kg_results["triples"][:10]:
-                all_triples["kg"].append({
-                    "subject": triple.get("subject", ""),
-                    "predicate": triple.get("predicate", ""),
-                    "object": triple.get("object", ""),
-                    "confidence": triple.get("confidence", 0.8),
-                    "source": "kg"
-                })
+            for triple in kg_results["triples"][:15]:
+                # 支持 5 字段路径三元组（两跳查询结果）
+                if "middle" in triple and "predicate1" in triple:
+                    # 将路径展开为两条独立三元组，并保留路径信息
+                    path_info = {
+                        "subject": triple.get("subject", ""),
+                        "predicate": triple.get("predicate1", ""),
+                        "object": triple.get("middle", ""),
+                        "confidence": triple.get("confidence", 0.75),
+                        "source": "kg",
+                        "is_path": True,
+                        "path_end": triple.get("object", ""),
+                        "path_predicate2": triple.get("predicate2", "")
+                    }
+                    all_triples["kg"].append(path_info)
+                    all_triples["kg"].append({
+                        "subject": triple.get("middle", ""),
+                        "predicate": triple.get("predicate2", ""),
+                        "object": triple.get("object", ""),
+                        "confidence": triple.get("confidence", 0.75),
+                        "source": "kg",
+                        "is_path": True,
+                        "path_start": triple.get("subject", ""),
+                        "path_predicate1": triple.get("predicate1", "")
+                    })
+                else:
+                    # 普通 3 字段三元组
+                    all_triples["kg"].append({
+                        "subject": triple.get("subject", ""),
+                        "predicate": triple.get("predicate", ""),
+                        "object": triple.get("object", ""),
+                        "confidence": triple.get("confidence", 0.8),
+                        "source": "kg"
+                    })
+
+        # 【第二层保底】检测两跳意图但 KG 三元组为空时，SQL 降级
+        if query and not any(
+            t.get("is_path") for t in all_triples["kg"]
+        ):
+            sql_fallback = self._sql_fallback_for_kg(query, kg_results)
+            if sql_fallback:
+                all_triples["kg"].extend(sql_fallback)
 
         return all_triples
+
+    def _sql_fallback_for_kg(
+        self,
+        query: str,
+        kg_results: Optional[Dict]
+    ) -> List[Dict[str, Any]]:
+        """
+        【第二层保底】当 KG 两跳路径三元组为空且检测到两跳意图时，
+        用 SQL 两步查询作为降级方案，确保用户一定能拿到答案
+
+        Args:
+            query: 原始查询
+            kg_results: KG 检索结果
+
+        Returns:
+            从 SQL 获取的两跳路径三元组列表
+        """
+        fallback_triples = []
+
+        # 检测是否是两跳意图查询
+        director_keywords = ["导演", "执导", "拍过"]
+        actor_keywords = ["主演", "演过", "出演过"]
+        other_movie_keywords = ["哪些电影", "还拍", "其他电影", "还导演", "还演", "还有什么电影"]
+
+        has_other_movie = any(k in query for k in other_movie_keywords)
+        if not has_other_movie:
+            return fallback_triples
+
+        is_director_intent = any(k in query for k in director_keywords)
+        is_actor_intent = any(k in query for k in actor_keywords)
+
+        if not is_director_intent and not is_actor_intent:
+            return fallback_triples
+
+        # 检查 KG 是否已返回两跳路径
+        if kg_results and kg_results.get("triples"):
+            has_path = any(
+                "middle" in t and "predicate1" in t
+                for t in kg_results["triples"]
+            )
+            if has_path:
+                return fallback_triples  # KG 已有路径，不需要 fallback
+
+        # 从查询中提取电影名称（简单规则：取"的"前面的部分）
+        import re
+        movie_match = re.match(r'^(.{2,20}?)(?:的|该)', query)
+        if not movie_match:
+            # 回退：取查询中的电影节点
+            movie_match = re.match(r'^(.{2,20}?)(?:还|有)', query)
+        if not movie_match:
+            return fallback_triples
+
+        movie_name = movie_match.group(1).strip()
+        if not movie_name:
+            return fallback_triples
+
+        try:
+            db = get_sqlite_db()
+
+            if is_director_intent:
+                step1_sql = """
+                    SELECT m.title_zh AS movie, d.name AS person_name
+                    FROM movie_directors md
+                    JOIN movies m ON md.movie_id = m.id
+                    JOIN directors d ON md.director_id = d.id
+                    WHERE m.title_zh = :movie_name
+                      AND d.name IS NOT NULL AND d.name != ''
+                    LIMIT 1
+                """
+                step2_sql = """
+                    SELECT m.title_zh AS movie
+                    FROM movie_directors md
+                    JOIN movies m ON md.movie_id = m.id
+                    JOIN directors d ON md.director_id = d.id
+                    WHERE d.name = :person_name
+                      AND m.title_zh IS NOT NULL AND m.title_zh != ''
+                      AND m.title_zh != :exclude_movie
+                """
+                rel1, rel2 = "导演", "导演过"
+            else:
+                step1_sql = """
+                    SELECT m.title_zh AS movie, a.name AS person_name
+                    FROM movie_actors ma
+                    JOIN movies m ON ma.movie_id = m.id
+                    JOIN actors a ON ma.actor_id = a.id
+                    WHERE m.title_zh = :movie_name
+                      AND a.name IS NOT NULL AND a.name != ''
+                    LIMIT 1
+                """
+                step2_sql = """
+                    SELECT m.title_zh AS movie
+                    FROM movie_actors ma
+                    JOIN movies m ON ma.movie_id = m.id
+                    JOIN actors a ON ma.actor_id = a.id
+                    WHERE a.name = :person_name
+                      AND m.title_zh IS NOT NULL AND m.title_zh != ''
+                      AND m.title_zh != :exclude_movie
+                """
+                rel1, rel2 = "主演", "演过"
+
+            step1 = db.execute_query(step1_sql, {"movie_name": movie_name})
+            if not step1:
+                return fallback_triples
+
+            person_name = step1[0].get("person_name", "")
+            if not person_name:
+                return fallback_triples
+
+            step2 = db.execute_query(step2_sql, {
+                "person_name": person_name,
+                "exclude_movie": movie_name
+            })
+
+            for row in step2[:15]:
+                other_movie = row.get("movie", "")
+                if other_movie:
+                    fallback_triples.append({
+                        "subject": movie_name,
+                        "predicate1": rel1,
+                        "middle": person_name,
+                        "predicate2": rel2,
+                        "object": other_movie,
+                        "confidence": 0.85,
+                        "source": "kg",
+                        "is_path": True,
+                        "sql_fallback": True
+                    })
+
+            if fallback_triples:
+                print(f"【融合层 SQL 降级】检测到两跳意图，SQL 返回 {len(fallback_triples)} 条路径三元组")
+
+        except Exception as e:
+            print(f"融合层 SQL 降级失败: {e}")
+
+        return fallback_triples
 
     def _detect_conflicts(
         self,
@@ -286,34 +513,67 @@ class FusionAgent:
         source_counter = {"sql": 1, "doc": 1, "kg": 1}
 
         # 添加三元组信息
-        for triple in triples:
-            source = triple.get("source", "doc")
-            source_idx = source_counter[source]
-            context_parts.append(
-                f"[{source.upper()}{source_idx}] "
-                f"{triple['subject']} - {triple['predicate']} - {triple['object']}"
-            )
-            source_counter[source] += 1
+        if triples:
+            context_parts.append("--- 抽取的事实三元组 ---")
+            for triple in triples:
+                source = triple.get("source", "doc")
+                source_idx = source_counter[source]
+                # 支持两跳路径三元组（带 predicate1/middle/predicate2 字段）
+                if triple.get("is_path") and "middle" in triple and "predicate1" in triple:
+                    context_parts.append(
+                        f"[{source.upper()}{source_idx}] "
+                        f"{triple['subject']} --[{triple['predicate1']}]--> "
+                        f"{triple['middle']} --[{triple['predicate2']}]--> "
+                        f"{triple['object'] if 'object' in triple and triple['object'] else triple.get('path_end', '')}"
+                    )
+                else:
+                    context_parts.append(
+                        f"[{source.upper()}{source_idx}] "
+                        f"{triple['subject']} - {triple['predicate']} - {triple['object']}"
+                    )
+                source_counter[source] += 1
 
-        # 添加原始结果摘要
-        if sql_results and sql_results.get("data"):
-            context_parts.append(f"\n[SQL] 数据库查询结果摘要:")
-            for row in sql_results["data"][:3]:
-                context_parts.append(f"  - {row}")
-
-        if doc_results and doc_results.get("results"):
-            context_parts.append(f"\n[DOC] 文档检索结果摘要:")
-            for doc in doc_results["results"][:2]:
+        # 当三元组为空（doc_only 且 LLM 抽取失败），直接注入文档全文摘要
+        if not triples and doc_results and doc_results.get("results"):
+            context_parts.append("--- 文档检索原文（三元组抽取失败后的回退内容） ---")
+            for i, doc in enumerate(doc_results["results"][:5]):
+                full_text = doc.get("document", "")
                 context_parts.append(
-                    f"  - {doc.get('document', '')[:100]}..."
+                    f"[DOC-RAW{i+1}] {full_text[:500]}"
+                )
+
+        # 添加原始结果摘要（作为辅助上下文）
+        if sql_results and sql_results.get("data"):
+            context_parts.append("\n[SQL] 数据库查询结果:")
+            for row in sql_results["data"][:5]:
+                row_str = ", ".join(
+                    f"{k}={v}" for k, v in row.items()
+                    if v is not None and k != "id"
+                )
+                context_parts.append(f"  - {row_str}")
+
+        if doc_results and doc_results.get("results") and triples:
+            context_parts.append("\n[DOC] 文档检索结果摘要（补充信息）:")
+            for i, doc in enumerate(doc_results["results"][:3]):
+                doc_text = doc.get("document", "")
+                context_parts.append(
+                    f"  [DOC-SUPP{i+1}] {doc_text[:300]}"
                 )
 
         if kg_results and kg_results.get("triples"):
-            context_parts.append(f"\n[KG] 知识图谱三元组:")
-            for triple in kg_results["triples"][:3]:
-                context_parts.append(
-                    f"  - {triple.get('subject')} --[{triple.get('predicate')}]--> {triple.get('object')}"
-                )
+            context_parts.append("\n[KG] 知识图谱关系:")
+            for triple in kg_results["triples"][:8]:
+                # 5 字段路径三元组：展示完整两跳链路
+                if "middle" in triple and "predicate1" in triple:
+                    context_parts.append(
+                        f"  - {triple.get('subject')} --[{triple.get('predicate1')}]--> "
+                        f"{triple.get('middle')} --[{triple.get('predicate2')}]--> "
+                        f"{triple.get('object')}"
+                    )
+                else:
+                    context_parts.append(
+                        f"  - {triple.get('subject')} --[{triple.get('predicate')}]--> {triple.get('object')}"
+                    )
 
         return "\n".join(context_parts)
 
@@ -349,7 +609,7 @@ class FusionAgent:
         try:
             # 1. 从各数据源抽取三元组
             all_triples = self._extract_triples_from_results(
-                sql_results, doc_results, kg_results
+                sql_results, doc_results, kg_results, query=query
             )
 
             # 统计各数据源三元组数量

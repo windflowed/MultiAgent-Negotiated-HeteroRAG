@@ -14,25 +14,26 @@ from src.utils.bm25_utils import BM25Retriever
 class DocumentRetrieverAgent:
     """文档检索 Agent，整合 BM25 与向量检索，支持重排序"""
 
-    def __init__(self, use_reranker: bool = True):
+    def __init__(
+        self,
+        vector_store=None,
+        bm25_retriever=None,
+        use_reranker: bool = True
+    ):
         """
         初始化文档检索 Agent
 
         Args:
+            vector_store: 预初始化的 VectorStore 实例，默认自动获取单例
+            bm25_retriever: 预初始化的 BM25Retriever 实例，默认自动获取单例
             use_reranker: 是否使用 BGE-Reranker 进行重排序
         """
-        self.config = load_config()
+        from src.utils.chroma_utils import get_vector_store
+        from src.utils.bm25_utils import get_bm25_retriever
+
+        self.vector_store = vector_store or get_vector_store()
+        self.bm25_retriever = bm25_retriever or get_bm25_retriever()
         self.use_reranker = use_reranker
-
-        # 初始化向量库
-        self.vector_store = VectorStore()
-
-        # 初始化 BM25 检索器
-        self.bm25_retriever = BM25Retriever()
-        try:
-            self.bm25_retriever.load()
-        except Exception:
-            print("BM25 索引未找到，需要先构建索引")
 
         # 初始化重排序模型
         self.reranker = None
@@ -274,9 +275,26 @@ class DocumentRetrieverAgent:
         return result
 
 
-def create_doc_retriever_agent(use_reranker: bool = True) -> DocumentRetrieverAgent:
-    """创建文档检索 Agent 实例"""
-    return DocumentRetrieverAgent(use_reranker=use_reranker)
+def create_doc_retriever_agent(
+    use_reranker: bool = True,
+    vector_store=None,
+    bm25_retriever=None
+) -> DocumentRetrieverAgent:
+    """创建文档检索 Agent 实例
+
+    Args:
+        use_reranker: 是否使用重排序
+        vector_store: 预初始化的 VectorStore 实例
+        bm25_retriever: 预初始化的 BM25Retriever 实例
+
+    Returns:
+        DocumentRetrieverAgent 实例
+    """
+    return DocumentRetrieverAgent(
+        vector_store=vector_store,
+        bm25_retriever=bm25_retriever,
+        use_reranker=use_reranker
+    )
 
 
 if __name__ == "__main__":

@@ -160,6 +160,20 @@ class RouterAgent:
                 sources = ["sql", "doc", "kg"]
                 reason = f"置信度 {confidence:.2f} 低于阈值 {self.confidence_threshold}，默认激活全部数据源"
 
+            # 6. 单源补充策略：仅激活1个源时，自动补充互补数据源以保证信息完整性
+            if len(sources) == 1:
+                if sources[0] == "doc":
+                    sources.append("sql")
+                    reason += " | 补充SQL以获取结构化数据"
+                elif sources[0] == "sql":
+                    sources.append("doc")
+                    reason += " | 补充文档以获取描述性信息"
+                elif sources[0] == "kg":
+                    sources.append("sql")
+                    reason += " | 补充SQL以获取实体属性数据"
+                # 重新计算置信度（源已增加）
+                confidence = self._calculate_confidence(sources, query)
+
             result["success"] = True
             result["sources"] = sources
             result["confidence"] = confidence

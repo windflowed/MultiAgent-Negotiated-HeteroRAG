@@ -7,30 +7,35 @@ import json
 import re
 from typing import Dict, List, Any, Optional, Tuple
 
-from src.utils.common import load_config, SQLiteDatabase
-from src.utils.kg_utils import KnowledgeGraph
+from src.utils.common import load_config, SQLiteDatabase, get_sqlite_db
+from src.utils.kg_utils import KnowledgeGraph, get_knowledge_graph
 from src.utils.prompts import KG_ENTITY_LINK_PROMPT
 
 
 class KGAgent:
     """知识图谱 Agent，支持实体链接、图谱推理、三元组查询"""
 
-    def __init__(self, llm=None):
+    def __init__(self, kg=None, db=None, llm=None):
         """
         初始化知识图谱 Agent
 
         Args:
+            kg: 知识图谱实例，为 None 时使用单例 get_knowledge_graph()
+            db: 数据库连接实例，为 None 时使用单例 get_sqlite_db()
             llm: 语言模型实例，为 None 时从配置创建
         """
         self.config = load_config()
-        self.kg = KnowledgeGraph()
-        self.db = SQLiteDatabase()
+        # 关键修复：kg=None 时回退到单例 get_knowledge_graph()，避免后续访问 None.graph 报错
+        self.kg = kg if kg is not None else get_knowledge_graph()
+        # db=None 时回退到单例 get_sqlite_db()
+        self.db = db if db is not None else get_sqlite_db()
 
-        # 加载知识图谱
+        # 确保知识图谱已加载（若单例已 load 过则无副作用）
         try:
-            self.kg.load()
-        except Exception:
-            print("知识图谱未找到，需要先构建")
+            if self.kg.graph.number_of_nodes() == 0:
+                self.kg.load()
+        except Exception as e:
+            print(f"知识图谱加载失败: {e}，请先运行 data/preprocess.py 构建 KG")
 
         # 构建实体映射表
         self._entity_mapping = self._build_entity_mapping()
@@ -55,7 +60,7 @@ class KGAgent:
         """
         mapping = {}
 
-        if self.kg.graph.number_of_nodes() == 0:
+        if self.kg is None or self.kg.graph.number_of_nodes() == 0:
             return mapping
 
         # 为演员和导演节点构建映射
@@ -76,7 +81,7 @@ class KGAgent:
         Returns:
             格式化的实体列表字符串
         """
-        if not self.kg.graph.number_of_nodes():
+        if not self.kg or not self.kg.graph.number_of_nodes():
             return "（暂无可用实体列表）"
 
         # 收集演员和导演节点
@@ -135,7 +140,7 @@ class KGAgent:
         Returns:
             消歧后的实体列表
         """
-        if self.kg.graph.number_of_nodes() == 0:
+        if not self.kg or self.kg.graph.number_of_nodes() == 0:
             return entities
 
         disambiguated = []
@@ -214,7 +219,7 @@ class KGAgent:
         entities = []
 
         # 检查知识图谱中存在的实体
-        if self.kg.graph.number_of_nodes() > 0:
+        if self.kg and self.kg.graph.number_of_nodes() > 0:
             for node in self.kg.graph.nodes():
                 if node in query:
                     node_type = self.kg.graph.nodes[node].get("type", "unknown")
@@ -235,7 +240,8 @@ class KGAgent:
             query: 原始查询
 
         Returns:
-            查询类型: "single_hop", "two_hop", "common_neighbors"
+            查询类型: "single_hop", "two_hop_director",
+                     "two_hop_actor", "common_neighbors"
         """
         # 如果有两个实体，可能是共同邻居查询
         if len(entities) >= 2:
@@ -244,6 +250,23 @@ class KGAgent:
             for keyword in cooperation_keywords:
                 if keyword in query:
                     return "common_neighbors"
+
+        # 两跳意图识别：单电影实体 + 角色关键词 + "其他电影/哪些电影"模式
+        movie_entities = [e for e in entities if e.get("type") == "movie"]
+        if len(movie_entities) == 1:
+            # "导演的还拍过"、"导演还拍过"、"执导"、"拍过哪些电影"
+            director_role_keywords = ["导演", "执导", "拍过"]
+            other_movie_keywords = ["哪些电影", "还拍", "其他电影", "还导演", "还有什么电影", "哪几部"]
+            has_director_role = any(k in query for k in director_role_keywords)
+            has_other_movie = any(k in query for k in other_movie_keywords)
+            if has_director_role and has_other_movie:
+                return "two_hop_director"
+
+            # "主演的还演过"、"主演还演过"、"演过哪些电影"
+            actor_role_keywords = ["主演", "演过", "出演过"]
+            has_actor_role = any(k in query for k in actor_role_keywords)
+            if has_actor_role and has_other_movie:
+                return "two_hop_actor"
 
         # 默认使用单跳查询
         return "single_hop"
@@ -432,6 +455,99 @@ class KGAgent:
             ]
         }
 
+    def _sql_two_step_query_fallback(
+        self,
+        movie_name: str,
+        relation_type: str
+    ) -> List[Dict[str, Any]]:
+        """
+        SQL 两步查询降级方案：先查中间人（导演/演员），再查其相关电影
+        作为 KG 两跳路径为空时的保底 fallback
+
+        Args:
+            movie_name: 电影名称
+            relation_type: "director" 或 "actor"
+
+        Returns:
+            三元组列表
+        """
+        triples = []
+
+        try:
+            # 第1步：查找该电影的导演/演员
+            if relation_type == "director":
+                step1_sql = """
+                    SELECT m.title_zh AS movie, d.name AS person_name
+                    FROM movie_directors md
+                    JOIN movies m ON md.movie_id = m.id
+                    JOIN directors d ON md.director_id = d.id
+                    WHERE m.title_zh = :movie_name
+                      AND d.name IS NOT NULL AND d.name != ''
+                    LIMIT 1
+                """
+                step2_predicate = "导演过"
+            else:  # actor
+                step1_sql = """
+                    SELECT m.title_zh AS movie, a.name AS person_name
+                    FROM movie_actors ma
+                    JOIN movies m ON ma.movie_id = m.id
+                    JOIN actors a ON ma.actor_id = a.id
+                    WHERE m.title_zh = :movie_name
+                      AND a.name IS NOT NULL AND a.name != ''
+                    LIMIT 1
+                """
+                step2_predicate = "演过"
+
+            step1_results = self.db.execute_query(step1_sql, {"movie_name": movie_name})
+
+            if not step1_results:
+                return triples
+
+            person_name = step1_results[0].get("person_name", "")
+            if not person_name:
+                return triples
+
+            # 第2步：查找该导演/演员的所有电影（排除输入电影本身）
+            step2_sql = """
+                SELECT m.title_zh AS movie
+                FROM movie_directors md
+                JOIN movies m ON md.movie_id = m.id
+                JOIN directors d ON md.director_id = d.id
+                WHERE d.name = :person_name
+                  AND m.title_zh IS NOT NULL AND m.title_zh != ''
+                  AND m.title_zh != :exclude_movie
+            """ if relation_type == "director" else """
+                SELECT m.title_zh AS movie
+                FROM movie_actors ma
+                JOIN movies m ON ma.movie_id = m.id
+                JOIN actors a ON ma.actor_id = a.id
+                WHERE a.name = :person_name
+                  AND m.title_zh IS NOT NULL AND m.title_zh != ''
+                  AND m.title_zh != :exclude_movie
+            """
+
+            step2_results = self.db.execute_query(step2_sql, {
+                "person_name": person_name,
+                "exclude_movie": movie_name
+            })
+
+            # 组装两跳路径三元组
+            for row in step2_results[:15]:
+                other_movie = row.get("movie", "")
+                if other_movie:
+                    triples.append(self._format_path((
+                        movie_name,
+                        "导演" if relation_type == "director" else "主演",
+                        person_name,
+                        step2_predicate,
+                        other_movie
+                    ), confidence=0.85))
+
+        except Exception as e:
+            print(f"SQL 两步查询降级失败: {e}")
+
+        return triples
+
     def query(self, natural_language_query: str) -> Dict[str, Any]:
         """
         执行知识图谱查询
@@ -484,8 +600,60 @@ class KGAgent:
                         confidence=0.7
                     ))
 
+            elif query_type == "two_hop_director":
+                # 两跳查询：电影 →[导演]→ 导演 →[导演过]→ 其他电影
+                entity_name = entities[0].get("name_en") or entities[0]["name"]
+                paths = self.kg.query_two_hop(
+                    entity_name,
+                    first_relation="导演",
+                    second_relation="导演过"
+                )
+
+                for path in paths[:15]:
+                    result["triples"].append(self._format_path(path, confidence=0.75))
+                # 同时保留单跳信息（电影本身的基本属性），便于回答完整
+                base_triples = self.kg.query_single_hop(entity_name)
+                for triple in base_triples[:5]:
+                    result["triples"].append(self._format_triple(triple, confidence=0.7))
+
+                # 【双重保底】KG 路径为空时，降级用 SQL 两步查询
+                if not paths:
+                    sql_fallback = self._sql_two_step_query_fallback(
+                        entity_name, "director"
+                    )
+                    result["triples"].extend(sql_fallback)
+                    if sql_fallback:
+                        result["sql_fallback"] = True
+                        print(f"KG 两跳路径为空，已降级使用 SQL 查询导演电影列表")
+
+            elif query_type == "two_hop_actor":
+                # 两跳查询：电影 →[主演]→ 演员 →[演过]→ 其他电影
+                entity_name = entities[0].get("name_en") or entities[0]["name"]
+                paths = self.kg.query_two_hop(
+                    entity_name,
+                    first_relation="主演",
+                    second_relation="演过"
+                )
+
+                for path in paths[:15]:
+                    result["triples"].append(self._format_path(path, confidence=0.75))
+                # 同时保留单跳信息（电影本身的基本属性）
+                base_triples = self.kg.query_single_hop(entity_name)
+                for triple in base_triples[:5]:
+                    result["triples"].append(self._format_triple(triple, confidence=0.7))
+
+                # 【双重保底】KG 路径为空时，降级用 SQL 两步查询
+                if not paths:
+                    sql_fallback = self._sql_two_step_query_fallback(
+                        entity_name, "actor"
+                    )
+                    result["triples"].extend(sql_fallback)
+                    if sql_fallback:
+                        result["sql_fallback"] = True
+                        print(f"KG 两跳路径为空，已降级使用 SQL 查询演员电影列表")
+
             elif query_type == "two_hop":
-                # 两跳查询 - 使用英文名
+                # 通用两跳查询（保留原签名兼容）
                 entity_name = entities[0].get("name_en") or entities[0]["name"]
                 paths = self.kg.query_two_hop(entity_name)
 
@@ -524,9 +692,21 @@ class KGAgent:
         return result
 
 
-def create_kg_agent() -> KGAgent:
-    """创建知识图谱 Agent 实例"""
-    return KGAgent()
+def create_kg_agent(kg=None, db=None) -> KGAgent:
+    """创建知识图谱 Agent 实例
+
+    Args:
+        kg: 知识图谱实例，为 None 时使用单例 get_knowledge_graph()
+        db: 数据库连接实例，为 None 时使用单例 get_sqlite_db()
+
+    Returns:
+        KGAgent 实例
+    """
+    if kg is None:
+        kg = get_knowledge_graph()
+    if db is None:
+        db = get_sqlite_db()
+    return KGAgent(kg=kg, db=db)
 
 
 if __name__ == "__main__":

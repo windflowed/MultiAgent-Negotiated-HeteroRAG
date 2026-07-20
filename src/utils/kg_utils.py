@@ -67,6 +67,8 @@ class KnowledgeGraph:
         for ma in movie_actors:
             if self.graph.has_node(ma["title_zh"]) and self.graph.has_node(ma["name"]):
                 self.graph.add_edge(ma["title_zh"], ma["name"], relation="主演")
+                # 反向边：演员 →[演过]→ 电影，用于两跳查询（电影→主演→演过→其他电影）
+                self.graph.add_edge(ma["name"], ma["title_zh"], relation="演过")
                 actor_movies[ma["name"]].append(ma["title_zh"])
 
         # 4. 加载导演节点和电影-导演关系
@@ -84,6 +86,8 @@ class KnowledgeGraph:
         for md in movie_directors:
             if self.graph.has_node(md["title_zh"]) and self.graph.has_node(md["name"]):
                 self.graph.add_edge(md["title_zh"], md["name"], relation="导演")
+                # 反向边：导演 →[导演过]→ 电影，用于两跳查询（电影→导演→导演过→其他电影）
+                self.graph.add_edge(md["name"], md["title_zh"], relation="导演过")
 
         # 5. 构建演员合作关系（共同出演同一部电影）
         for actor, movies_list in actor_movies.items():
@@ -124,12 +128,19 @@ class KnowledgeGraph:
 
         return triples
 
-    def query_two_hop(self, entity_name: str) -> List[Tuple[str, str, str, str, str]]:
+    def query_two_hop(
+        self,
+        entity_name: str,
+        first_relation: Optional[str] = None,
+        second_relation: Optional[str] = None
+    ) -> List[Tuple[str, str, str, str, str]]:
         """
         两跳关系查询
 
         Args:
             entity_name: 起始实体名称
+            first_relation: 第一跳关系过滤（如 "导演"），None 表示不过滤
+            second_relation: 第二跳关系过滤（如 "导演过"），None 表示不过滤
 
         Returns:
             五元组列表 [(实体1, 关系1, 中间实体, 关系2, 实体2), ...]
@@ -139,16 +150,24 @@ class KnowledgeGraph:
         if entity_name not in self.graph:
             return paths
 
-        # 第一跳
+        # 第一跳：出边
         for _, mid_node, data1 in self.graph.out_edges(entity_name, data=True):
-            # 第二跳
+            rel1 = data1.get("relation", "")
+            # 关系过滤
+            if first_relation and rel1 != first_relation:
+                continue
+            # 第二跳：出边（支持反向边，如 director→[导演过]→movie）
             for _, end_node, data2 in self.graph.out_edges(mid_node, data=True):
+                rel2 = data2.get("relation", "")
+                # 关系过滤
+                if second_relation and rel2 != second_relation:
+                    continue
                 if end_node != entity_name:
                     paths.append((
                         entity_name,
-                        data1.get("relation", ""),
+                        rel1,
                         mid_node,
-                        data2.get("relation", ""),
+                        rel2,
                         end_node
                     ))
 
@@ -264,3 +283,21 @@ if __name__ == "__main__":
     print("\n共同邻居查询 '萨姆·沃辛顿' 和 '西格妮·韦弗':")
     common = kg.query_common_neighbors("萨姆·沃辛顿", "西格妮·韦弗")
     print(f"  共同出演: {common}")
+
+
+# 模块级单例：知识图谱
+_kg_singleton = None
+
+
+def get_knowledge_graph() -> KnowledgeGraph:
+    """
+    获取知识图谱单例，延迟加载
+
+    Returns:
+        KnowledgeGraph 单例实例
+    """
+    global _kg_singleton
+    if _kg_singleton is None:
+        _kg_singleton = KnowledgeGraph()
+        _kg_singleton.load()
+    return _kg_singleton
